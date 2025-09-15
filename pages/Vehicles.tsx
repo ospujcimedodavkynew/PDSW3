@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import type { Vehicle } from '../types';
-import { Wrench, ShieldAlert, Plus } from 'lucide-react';
+import { Wrench, ShieldAlert, Plus, Edit } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import ServiceHistoryModal from '../components/ServiceHistoryModal';
 import DamageHistoryModal from '../components/DamageHistoryModal';
+import VehicleFormModal from '../components/VehicleFormModal';
 
 const VehicleCard: React.FC<{
     vehicle: Vehicle;
+    onEdit: (vehicle: Vehicle) => void;
     onShowServiceHistory: (vehicle: Vehicle) => void;
     onShowDamageHistory: (vehicle: Vehicle) => void;
-}> = ({ vehicle, onShowServiceHistory, onShowDamageHistory }) => {
+}> = ({ vehicle, onEdit, onShowServiceHistory, onShowDamageHistory }) => {
     
     const statusInfo = {
         available: { text: 'K dispozici', color: 'bg-green-500' },
@@ -19,7 +21,7 @@ const VehicleCard: React.FC<{
     
     return (
         <div className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col">
-            <img src={vehicle.imageUrl} alt={vehicle.name} className="w-full h-48 object-cover"/>
+            <img src={vehicle.imageUrl || 'https://via.placeholder.com/300x200.png?text=Vuz+bez+foto'} alt={vehicle.name} className="w-full h-48 object-cover"/>
             <div className="p-4 flex-grow flex flex-col">
                 <div className="flex justify-between items-start">
                     <h3 className="text-xl font-bold text-gray-800">{vehicle.name}</h3>
@@ -36,7 +38,10 @@ const VehicleCard: React.FC<{
                     <p className="text-sm">Den: <span className="font-bold">{vehicle.dailyRate} Kč</span></p>
                 </div>
                 
-                <div className="mt-4 flex space-x-2">
+                 <div className="mt-4 flex space-x-2">
+                    <button onClick={() => onEdit(vehicle)} className="flex-1 bg-gray-100 text-gray-800 text-sm py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center">
+                        <Edit className="w-4 h-4 mr-2" /> Upravit
+                    </button>
                     <button onClick={() => onShowServiceHistory(vehicle)} className="flex-1 bg-blue-100 text-blue-800 text-sm py-2 rounded-lg hover:bg-blue-200 transition-colors flex items-center justify-center">
                         <Wrench className="w-4 h-4 mr-2" /> Servis
                     </button>
@@ -56,6 +61,8 @@ const Vehicles: React.FC = () => {
     
     const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
     const [isDamageModalOpen, setIsDamageModalOpen] = useState(false);
+    const [isVehicleFormModalOpen, setIsVehicleFormModalOpen] = useState(false);
+    
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
 
     const handleShowServiceHistory = (vehicle: Vehicle) => {
@@ -68,9 +75,15 @@ const Vehicles: React.FC = () => {
         setIsDamageModalOpen(true);
     };
 
+    const handleOpenVehicleForm = (vehicle: Vehicle | null = null) => {
+        setSelectedVehicle(vehicle);
+        setIsVehicleFormModalOpen(true);
+    };
+
     const handleCloseModals = () => {
         setIsServiceModalOpen(false);
         setIsDamageModalOpen(false);
+        setIsVehicleFormModalOpen(false);
         setSelectedVehicle(null);
     };
 
@@ -80,10 +93,11 @@ const Vehicles: React.FC = () => {
         <div>
             <ServiceHistoryModal isOpen={isServiceModalOpen} onClose={handleCloseModals} vehicle={selectedVehicle} />
             <DamageHistoryModal isOpen={isDamageModalOpen} onClose={handleCloseModals} vehicle={selectedVehicle} />
+            <VehicleFormModal isOpen={isVehicleFormModalOpen} onClose={handleCloseModals} vehicle={selectedVehicle} />
 
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Vozový park</h1>
-                <button onClick={() => alert('Funkce pro přidání vozidla není implementována.')} className="bg-secondary text-dark-text font-bold py-2 px-4 rounded-lg hover:bg-secondary-hover transition-colors flex items-center">
+                <button onClick={() => handleOpenVehicleForm()} className="bg-secondary text-dark-text font-bold py-2 px-4 rounded-lg hover:bg-secondary-hover transition-colors flex items-center">
                     <Plus className="w-5 h-5 mr-2" />
                     Přidat vozidlo
                 </button>
@@ -93,6 +107,7 @@ const Vehicles: React.FC = () => {
                     <VehicleCard 
                         key={vehicle.id} 
                         vehicle={vehicle}
+                        onEdit={handleOpenVehicleForm}
                         onShowServiceHistory={handleShowServiceHistory}
                         onShowDamageHistory={handleShowDamageHistory}
                     />

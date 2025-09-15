@@ -12,14 +12,19 @@ export enum Page {
 export interface Vehicle {
     id: string;
     name: string;
-    licensePlate: string;
+    make?: string;
+    model?: string;
     year: number;
-    imageUrl: string;
+    licensePlate: string;
     status: 'available' | 'rented' | 'maintenance';
+    imageUrl?: string;
     rate4h: number;
     rate12h: number;
     dailyRate: number;
+    features?: string[];
     currentMileage: number;
+    description?: string;
+    dimensions?: string;
 }
 
 export interface Customer {
@@ -31,6 +36,7 @@ export interface Customer {
     driverLicenseNumber: string;
     address: string;
     driverLicenseImageUrl?: string;
+    ico?: string;
 }
 
 export interface Reservation {
@@ -92,6 +98,7 @@ export interface VehicleDamage {
     location: string;
     imageUrl: string;
     reportedAt: Date | string;
+    status: 'reported' | 'repaired';
     // Expanded property
     reservation?: Reservation;
 }

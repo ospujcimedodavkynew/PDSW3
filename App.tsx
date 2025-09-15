@@ -11,6 +11,7 @@ import Financials from './pages/Financials';
 import Reports from './pages/Reports';
 import Login from './pages/Login';
 import CustomerPortal from './pages/CustomerPortal';
+import OnlineBooking from './pages/OnlineBooking';
 import { Page } from './types';
 import { Loader } from 'lucide-react';
 
@@ -18,8 +19,14 @@ const AppContent: React.FC = () => {
     const { session, loading } = useData();
     const [currentPage, setCurrentPage] = useState<Page>(Page.DASHBOARD);
     
-    const portalToken = new URLSearchParams(window.location.search).get('portal');
+    const urlParams = new URLSearchParams(window.location.search);
+    const portalToken = urlParams.get('portal');
+    const isOnlineBooking = urlParams.get('online-rezervace') === 'true';
 
+    if (isOnlineBooking) {
+        return <OnlineBooking />;
+    }
+    
     if (portalToken) {
         return <CustomerPortal token={portalToken} />;
     }

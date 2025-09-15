@@ -25,16 +25,29 @@
       }
     </script>
     
-    <!-- === KLÍČOVÁ ZMĚNA ZDE === -->
-    <!-- Tento skript nastaví vaše klíče tak, aby je aplikace mohla bezpečně načíst. -->
-    <!-- Nahraďte placeholder hodnoty vašimi skutečnými klíči ze Supabase. -->
+    <!-- =================================================================== -->
+    <!-- === DŮLEŽITÉ: NASTAVENÍ PŘIPOJENÍ K DATABÁZI (SUPABASE) === -->
+    <!-- =================================================================== -->
+    <!-- 
+      Aby se aplikace mohla připojit k vaší databázi, musíte zde
+      vyplnit vaše unikátní klíče ze Supabase.
+
+      POSTUP:
+      1. Přihlaste se do vašeho projektu na app.supabase.com
+      2. Jděte do "Project Settings" (ozubené kolečko) -> "API".
+      3. Zkopírujte "Project URL" a vložte ji místo placeholderu níže.
+      4. Zkopírujte "anon" "public" klíč a vložte ho místo placeholderu níže.
+    -->
     <script>
       window.env = {
-        VITE_SUPABASE_URL: "https://pnamzbzuqqeyjotswxbd.supabase.co", // <-- VLOŽTE VAŠI SUPABASE URL
-        VITE_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuYW16Ynp1cXFleWpvdHN3eGJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MzA0NzYsImV4cCI6MjA3MzUwNjQ3Nn0.M_7RLVc0gHG3VeeSzvQ3f4Vw0ftWbj68Ww15DF65PYs" // <-- VLOŽTE VÁŠ SUPABASE ANON KEY
+        // PŘÍKLAD: "https://abcdefghijkl.supabase.co"
+        VITE_SUPABASE_URL: "!!! SEM VLOŽTE VAŠI SUPABASE URL !!!",
+        
+        // PŘÍKLAD: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3Mi..."
+        VITE_SUPABASE_ANON_KEY: "!!! SEM VLOŽTE VÁŠ SUPABASE ANON KEY !!!"
       };
     </script>
-    <!-- ========================== -->
+    <!-- =================================================================== -->
 
 <script type="importmap">
 {
