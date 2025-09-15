@@ -1,113 +1,8 @@
-import React, { useEffect, useState, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { getVehicles, getCustomers, getReservations, addCustomer, addReservation, addContract } from '../services/api';
 import type { Reservation, Vehicle, Customer } from '../types';
-import { UserPlus, Car, Calendar as CalendarIcon, Clock, Signature } from 'lucide-react';
-
-// Signature Pad Component
-interface SignaturePadHandles {
-    getSignature: () => string;
-    clear: () => void;
-    isEmpty: () => boolean;
-}
-
-const SignaturePad = forwardRef<SignaturePadHandles>((props, ref) => {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [isDrawing, setIsDrawing] = useState(false);
-    const [isEmpty, setIsEmpty] = useState(true);
-
-    const getContext = () => canvasRef.current?.getContext('2d');
-
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        if (canvas) {
-            const ctx = getContext();
-            if (ctx) {
-                ctx.strokeStyle = '#000';
-                ctx.lineWidth = 2;
-                ctx.lineCap = 'round';
-            }
-        }
-    }, []);
-    
-    const getCoords = (e: React.MouseEvent | React.TouchEvent): { x: number, y: number } => {
-        const canvas = canvasRef.current;
-        if (!canvas) return { x: 0, y: 0 };
-        const rect = canvas.getBoundingClientRect();
-        if ('touches' in e.nativeEvent) {
-             return { x: e.nativeEvent.touches[0].clientX - rect.left, y: e.nativeEvent.touches[0].clientY - rect.top };
-        }
-        return { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY };
-    }
-
-    const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
-        const ctx = getContext();
-        if (ctx) {
-            const { x, y } = getCoords(e);
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-            setIsDrawing(true);
-            setIsEmpty(false);
-        }
-    };
-
-    const draw = (e: React.MouseEvent | React.TouchEvent) => {
-        if (!isDrawing) return;
-        const ctx = getContext();
-        if (ctx) {
-            const { x, y } = getCoords(e);
-            ctx.lineTo(x, y);
-            ctx.stroke();
-        }
-    };
-
-    const stopDrawing = () => {
-        const ctx = getContext();
-        if (ctx) {
-            ctx.closePath();
-            setIsDrawing(false);
-        }
-    };
-
-    const clear = () => {
-        const ctx = getContext();
-        const canvas = canvasRef.current;
-        if (ctx && canvas) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            setIsEmpty(true);
-        }
-    };
-
-    useImperativeHandle(ref, () => ({
-        getSignature: () => {
-            if (isEmpty || !canvasRef.current) return '';
-            return canvasRef.current.toDataURL('image/png');
-        },
-        clear,
-        isEmpty: () => isEmpty,
-    }));
-
-    return (
-        <div>
-            <canvas
-                ref={canvasRef}
-                width="400"
-                height="150"
-                className="border border-gray-400 rounded-md bg-white cursor-crosshair"
-                onMouseDown={startDrawing}
-                onMouseMove={draw}
-                onMouseUp={stopDrawing}
-                onMouseLeave={stopDrawing}
-                onTouchStart={startDrawing}
-                onTouchMove={draw}
-                onTouchEnd={stopDrawing}
-            />
-            <button type="button" onClick={clear} className="text-sm mt-2 text-blue-600 hover:underline">
-                Vymazat podpis
-            </button>
-        </div>
-    );
-});
-
+import { UserPlus, Car, Calendar as CalendarIcon, Signature, Edit } from 'lucide-react';
+import SignatureModal from '../components/SignatureModal'; // Import nové komponenty
 
 const Reservations: React.FC = () => {
     // Data states
@@ -124,7 +19,10 @@ const Reservations: React.FC = () => {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     
-    const signaturePadRef = useRef<SignaturePadHandles>(null);
+    // --- ZMĚNY PRO PODPIS ---
+    const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+    const [signatureDataUrl, setSignatureDataUrl] = useState<string>('');
+    // -------------------------
 
     // Fetch initial data
     useEffect(() => {
@@ -150,16 +48,15 @@ const Reservations: React.FC = () => {
     
     const availableVehicles = useMemo(() => {
         if (!startDate || !endDate) {
-            return []; // Don't show any vehicles until a date range is selected
+            return [];
         }
         const start = new Date(startDate);
         const end = new Date(endDate);
         if (end <= start) {
-            return []; // Invalid date range
+            return [];
         }
         const conflictingVehicleIds = new Set<string>();
         for (const r of reservations) {
-            // Check only against reservations that will be active or are scheduled
             if (r.status === 'scheduled' || r.status === 'active') {
                 const resStart = new Date(r.startDate);
                 const resEnd = new Date(r.endDate);
@@ -168,7 +65,6 @@ const Reservations: React.FC = () => {
                 }
             }
         }
-        // A vehicle is available if it's not in maintenance and doesn't have a conflicting reservation
         return vehicles.filter(v => v.status !== 'maintenance' && !conflictingVehicleIds.has(v.id));
     }, [vehicles, reservations, startDate, endDate]);
 
@@ -187,7 +83,6 @@ const Reservations: React.FC = () => {
         if (durationHours <= 12) {
             return selectedVehicle.rate12h;
         }
-        // For 12+ hours, calculate based on days
         const days = Math.ceil(durationHours / 24);
         return days * selectedVehicle.dailyRate;
     }, [selectedVehicle, startDate, endDate]);
@@ -206,6 +101,11 @@ const Reservations: React.FC = () => {
         setEndDate(formattedEnd);
     };
 
+    const handleSaveSignature = (dataUrl: string) => {
+        setSignatureDataUrl(dataUrl);
+        setIsSignatureModalOpen(false);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
@@ -217,7 +117,7 @@ const Reservations: React.FC = () => {
         if (!selectedVehicleId) { alert("Vyberte prosím vozidlo."); return; }
         if (!startDate || !endDate) { alert("Vyberte prosím období pronájmu."); return; }
         if (new Date(endDate) <= new Date(startDate)) { alert("Datum konce musí být po datu začátku."); return; }
-        if (signaturePadRef.current?.isEmpty()) { alert("Zákazník se musí podepsat."); return; }
+        if (!signatureDataUrl) { alert("Zákazník se musí podepsat."); return; }
         if (!availableVehicles.some(v => v.id === selectedVehicleId)) {
             alert("Vybrané vozidlo není v tomto termínu dostupné. Zvolte prosím jiné vozidlo nebo termín.");
             return;
@@ -299,7 +199,6 @@ Denní limit pro nájezd je 300 km. Za každý kilometr nad tento limit (vypoč�
 Tato smlouva je vyhotovena elektronicky. Nájemce svým digitálním podpisem stvrzuje, že se seznámil s obsahem smlouvy, souhlasí s ním a vozidlo v uvedeném stavu přebírá.
             `;
             
-            // Save contract to database
             await addContract({
                 reservationId: newReservation.id,
                 customerId: finalCustomerId,
@@ -308,7 +207,6 @@ Tato smlouva je vyhotovena elektronicky. Nájemce svým digitálním podpisem st
                 contractText: contractText
             });
 
-            // Generate and open mailto link with BCC
             const bccEmail = "smlouvydodavky@gmail.com";
             const mailtoBody = encodeURIComponent(contractText);
             const mailtoLink = `mailto:${customerForContract.email}?bcc=${bccEmail}&subject=${encodeURIComponent(`Smlouva o pronájmu vozidla ${selectedVehicle?.name}`)}&body=${mailtoBody}`;
@@ -317,14 +215,13 @@ Tato smlouva je vyhotovena elektronicky. Nájemce svým digitálním podpisem st
 
             alert("Rezervace byla úspěšně vytvořena a smlouva uložena! Nyní budete přesměrováni do emailového klienta pro odeslání smlouvy.");
             
-            // Reset form
             setSelectedCustomerId('');
             setIsNewCustomer(false);
             setNewCustomerData({ firstName: '', lastName: '', email: '', phone: '', driverLicenseNumber: '', address: '' });
             setSelectedVehicleId('');
             setStartDate('');
             setEndDate('');
-            signaturePadRef.current?.clear();
+            setSignatureDataUrl('');
 
         } catch (error) {
             console.error("Failed to create reservation:", error);
@@ -337,11 +234,16 @@ Tato smlouva je vyhotovena elektronicky. Nájemce svým digitálním podpisem st
     if (loading && customers.length === 0) return <div>Načítání...</div>;
 
     return (
+        <>
+        <SignatureModal 
+            isOpen={isSignatureModalOpen}
+            onClose={() => setIsSignatureModalOpen(false)}
+            onSave={handleSaveSignature}
+        />
         <form onSubmit={handleSubmit} className="space-y-8">
             <h1 className="text-3xl font-bold text-gray-800">Nová rezervace</h1>
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Left Column: Form Fields */}
                 <div className="lg:col-span-2 space-y-6 bg-white p-6 rounded-lg shadow-md">
                     {/* Customer Section */}
                     <section>
@@ -429,7 +331,30 @@ Tato smlouva je vyhotovena elektronicky. Nájemce svým digitálním podpisem st
                     {/* Signature Section */}
                     <section>
                          <h2 className="text-xl font-semibold text-gray-700 flex items-center mb-4"><Signature className="mr-2"/>4. Podpis zákazníka</h2>
-                         <SignaturePad ref={signaturePadRef} />
+                         {signatureDataUrl ? (
+                             <div className="border border-gray-300 rounded-lg p-4 flex items-center justify-between">
+                                 <div className="bg-gray-100 p-2 rounded">
+                                    <img src={signatureDataUrl} alt="Podpis zákazníka" className="h-16 w-auto" />
+                                 </div>
+                                 <p className="font-semibold text-green-600">Podpis uložen</p>
+                                 <button
+                                     type="button"
+                                     onClick={() => setIsSignatureModalOpen(true)}
+                                     className="flex items-center py-2 px-4 rounded-md font-semibold bg-gray-200 hover:bg-gray-300"
+                                 >
+                                    <Edit className="w-4 h-4 mr-2" /> Změnit podpis
+                                 </button>
+                             </div>
+                         ) : (
+                            <button
+                                type="button"
+                                onClick={() => setIsSignatureModalOpen(true)}
+                                className="w-full py-4 px-6 border-2 border-dashed border-gray-400 rounded-lg text-gray-600 hover:bg-gray-50 hover:border-primary flex items-center justify-center transition-colors"
+                            >
+                                <Signature className="mr-3 w-6 h-6"/>
+                                <span className="font-bold text-lg">Otevřít pro podpis zákazníka</span>
+                            </button>
+                         )}
                     </section>
 
                 </div>
@@ -475,6 +400,7 @@ Tato smlouva je vyhotovena elektronicky. Nájemce svým digitálním podpisem st
                 </div>
             </div>
         </form>
+        </>
     );
 };
 
