@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, FileText, Gauge, ShieldAlert, Camera, PlusCircle, Trash2 } from 'lucide-react';
-import { Reservation, VehicleDamage } from '../types';
-import { activateReservation, completeReservation, addDamage } from '../services/api';
+import { Reservation } from '../types';
+import { useData } from '../contexts/DataContext';
 
 interface NewDamage {
     description: string;
@@ -17,6 +17,8 @@ interface ReservationDetailModalProps {
 }
 
 const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen, onClose, reservation }) => {
+    const { actions } = useData();
+
     // --- HOOKS ---
     const [notes, setNotes] = useState('');
     const [startMileage, setStartMileage] = useState<string>('');
@@ -121,7 +123,7 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                     setIsProcessing(false);
                     return;
                 }
-                await activateReservation(reservation.id, Number(startMileage));
+                await actions.activateReservation(reservation.id, Number(startMileage));
             } else if (isArrival) {
                  if (!endMileage || Number(endMileage) <= (reservation.startMileage ?? 0)) {
                     alert('Konečný stav tachometru musí být větší než počáteční.');
@@ -131,7 +133,7 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                 
                 // 1. Save all reported damages
                 for (const damage of newDamages) {
-                    await addDamage({
+                    await actions.addDamage({
                         vehicleId: reservation.vehicle!.id,
                         reservationId: reservation.id,
                         description: damage.description,
@@ -154,7 +156,7 @@ Poplatek za překročení: ${extraCharge.toLocaleString('cs-CZ')} Kč
 `;
                 const finalNotes = notes ? `${notes}\n\n${mileageReport}` : mileageReport;
 
-                await completeReservation(reservation.id, Number(endMileage), finalNotes);
+                await actions.completeReservation(reservation.id, Number(endMileage), finalNotes);
             }
             onClose();
         } catch (error) {

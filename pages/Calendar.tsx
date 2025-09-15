@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { getReservations, getVehicles } from '../services/api';
+import React, { useState, useMemo } from 'react';
 import { Reservation, Vehicle } from '../types';
 import { ChevronLeft, ChevronRight, Loader } from 'lucide-react';
 import ReservationDetailModal from '../components/ReservationDetailModal';
+import { useData } from '../contexts/DataContext';
 
 const statusColors: { [key in Reservation['status']]: string } = {
     'pending-customer': 'bg-yellow-400 border-yellow-500 text-yellow-800',
@@ -12,28 +12,11 @@ const statusColors: { [key in Reservation['status']]: string } = {
 };
 
 const Calendar: React.FC = () => {
-    const [reservations, setReservations] = useState<Reservation[]>([]);
-    const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-    const [currentDate, setCurrentDate] = useState(new Date());
-    const [loading, setLoading] = useState(true);
-    const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
+    const { data, loading, actions } = useData();
+    const { reservations, vehicles } = data;
 
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const [resData, vehData] = await Promise.all([getReservations(), getVehicles()]);
-            setReservations(resData);
-            setVehicles(vehData);
-        } catch (error) {
-            console.error("Failed to fetch calendar data:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-    
-    useEffect(() => {
-        fetchData();
-    }, []);
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
 
     const { monthName, year, daysInMonth, firstDayOfMonth } = useMemo(() => {
         const year = currentDate.getFullYear();
@@ -54,13 +37,13 @@ const Calendar: React.FC = () => {
     
     const handleCloseModal = () => {
         setSelectedReservation(null);
-        fetchData();
+        // Data context will handle refresh if needed
     }
 
     const today = new Date();
     const isCurrentMonth = today.getFullYear() === year && today.getMonth() === currentDate.getMonth();
 
-    if (loading) {
+    if (loading && vehicles.length === 0) {
         return <div className="flex justify-center items-center h-full"><Loader className="w-8 h-8 animate-spin" /> Načítání kalendáře...</div>;
     }
 

@@ -1,32 +1,27 @@
-// Defines the available pages for navigation
 export enum Page {
-    DASHBOARD = 'dashboard',
-    RESERVATIONS = 'reservations',
-    CALENDAR = 'calendar',
-    VEHICLES = 'vehicles',
-    CUSTOMERS = 'customers',
-    CONTRACTS = 'contracts',
-    FINANCIALS = 'financials',
+    DASHBOARD = 'DASHBOARD',
+    RESERVATIONS = 'RESERVATIONS',
+    CALENDAR = 'CALENDAR',
+    VEHICLES = 'VEHICLES',
+    CUSTOMERS = 'CUSTOMERS',
+    CONTRACTS = 'CONTRACTS',
+    FINANCIALS = 'FINANCIALS',
+    REPORTS = 'REPORTS',
 }
 
-// Represents a vehicle in the fleet
 export interface Vehicle {
     id: string;
     name: string;
-    make: string;
-    model: string;
-    year: number;
     licensePlate: string;
-    status: 'available' | 'rented' | 'maintenance';
+    year: number;
     imageUrl: string;
+    status: 'available' | 'rented' | 'maintenance';
     rate4h: number;
     rate12h: number;
     dailyRate: number;
-    features: string[];
     currentMileage: number;
 }
 
-// Represents a customer
 export interface Customer {
     id: string;
     firstName: string;
@@ -38,65 +33,65 @@ export interface Customer {
     driverLicenseImageUrl?: string;
 }
 
-// Represents a reservation
 export interface Reservation {
     id: string;
     customerId: string;
     vehicleId: string;
-    startDate: Date;
-    endDate: Date;
+    startDate: Date | string;
+    endDate: Date | string;
     status: 'pending-customer' | 'scheduled' | 'active' | 'completed';
-    portalToken?: string;
-    notes?: string;
-    customer?: Customer;
-    vehicle?: Vehicle;
     startMileage?: number;
     endMileage?: number;
+    notes?: string;
+    portalToken?: string;
+    // Expanded properties for easy access in components
+    customer?: Customer;
+    vehicle?: Vehicle;
 }
 
-// Represents a contract
 export interface Contract {
     id: string;
     reservationId: string;
     customerId: string;
     vehicleId: string;
-    generatedAt: Date;
+    generatedAt: Date | string;
     contractText: string;
-    customer: Customer;
-    vehicle: Vehicle;
+    // Expanded properties
+    customer?: Customer;
+    vehicle?: Vehicle;
 }
 
-// Represents a financial transaction
 export interface FinancialTransaction {
     id: string;
-    reservationId?: string;
-    amount: number;
-    date: Date;
-    description: string;
     type: 'income' | 'expense';
-}
-
-// Represents a single damage report for a vehicle
-export interface VehicleDamage {
-    id: string;
-    vehicleId: string;
-    reservationId?: string;
+    amount: number;
+    date: Date | string;
     description: string;
-    location: string;
-    imageUrl: string;
-    reportedAt: Date;
-    status: 'reported' | 'repaired';
-    reservation?: Partial<Reservation>; // For linking in history
+    reservationId?: string;
+    // Expanded properties
+    reservation?: Reservation;
 }
 
-// Represents a service record for a vehicle
 export interface VehicleService {
     id: string;
     vehicleId: string;
     description: string;
-    serviceDate: Date;
+    serviceDate: Date | string;
     cost?: number;
     notes?: string;
     status: 'planned' | 'completed';
-    vehicle?: Pick<Vehicle, 'name' | 'licensePlate' | 'currentMileage'>;
+    // Expanded property
+    vehicle?: Vehicle;
+}
+
+export interface VehicleDamage {
+    id: string;
+    vehicleId: string;
+    reservationId: string;
+    description: string;
+    location: string;
+    imageUrl: string;
+    reportedAt: Date | string;
+    // Expanded property
+    reservation?: Reservation;
 }

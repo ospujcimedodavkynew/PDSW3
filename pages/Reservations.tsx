@@ -1,17 +1,15 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { getVehicles, getCustomers, getReservations, addCustomer, addReservation, addContract } from '../services/api';
+import React, { useState, useMemo } from 'react';
 import type { Reservation, Vehicle, Customer } from '../types';
 import { UserPlus, Car, Calendar as CalendarIcon, Signature, Edit } from 'lucide-react';
-import SignatureModal from '../components/SignatureModal'; // Import nové komponenty
+import SignatureModal from '../components/SignatureModal';
+import { useData } from '../contexts/DataContext';
 
 const Reservations: React.FC = () => {
-    // Data states
-    const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-    const [customers, setCustomers] = useState<Customer[]>([]);
-    const [reservations, setReservations] = useState<Reservation[]>([]);
-    const [loading, setLoading] = useState(true);
-
+    const { data, loading, actions } = useData();
+    const { vehicles, customers, reservations } = data;
+    
     // Form states
+    const [isProcessing, setIsProcessing] = useState(false);
     const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
     const [isNewCustomer, setIsNewCustomer] = useState(false);
     const [newCustomerData, setNewCustomerData] = useState<Omit<Customer, 'id'>>({ firstName: '', lastName: '', email: '', phone: '', driverLicenseNumber: '', address: '' });
@@ -19,42 +17,19 @@ const Reservations: React.FC = () => {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     
-    // --- ZMĚNY PRO PODPIS ---
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
     const [signatureDataUrl, setSignatureDataUrl] = useState<string>('');
-    // -------------------------
-
-    // Fetch initial data
-    useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            try {
-                const [vehData, custData, resData] = await Promise.all([getVehicles(), getCustomers(), getReservations()]);
-                setVehicles(vehData);
-                setCustomers(custData);
-                setReservations(resData);
-            } catch (error) {
-                console.error("Failed to fetch data:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, []);
-
+    
     // Memoized calculations for performance
     const selectedCustomer = useMemo(() => customers.find(c => c.id === selectedCustomerId), [customers, selectedCustomerId]);
     const selectedVehicle = useMemo(() => vehicles.find(v => v.id === selectedVehicleId), [vehicles, selectedVehicleId]);
     
     const availableVehicles = useMemo(() => {
-        if (!startDate || !endDate) {
-            return [];
-        }
+        if (!startDate || !endDate) return [];
         const start = new Date(startDate);
         const end = new Date(endDate);
-        if (end <= start) {
-            return [];
-        }
+        if (end <= start) return [];
+        
         const conflictingVehicleIds = new Set<string>();
         for (const r of reservations) {
             if (r.status === 'scheduled' || r.status === 'active') {
@@ -77,12 +52,8 @@ const Reservations: React.FC = () => {
 
         const durationHours = (end.getTime() - start.getTime()) / (1000 * 3600);
         
-        if (durationHours <= 4) {
-            return selectedVehicle.rate4h;
-        }
-        if (durationHours <= 12) {
-            return selectedVehicle.rate12h;
-        }
+        if (durationHours <= 4) return selectedVehicle.rate4h;
+        if (durationHours <= 12) return selectedVehicle.rate12h;
         const days = Math.ceil(durationHours / 24);
         return days * selectedVehicle.dailyRate;
     }, [selectedVehicle, startDate, endDate]);
@@ -109,8 +80,6 @@ const Reservations: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        let customerForContract: Customer | undefined = selectedCustomer;
-        
         // Validation
         if (!isNewCustomer && !selectedCustomerId) { alert("Vyberte prosím zákazníka."); return; }
         if (isNewCustomer && (!newCustomerData.firstName || !newCustomerData.lastName || !newCustomerData.email || !newCustomerData.address)) { alert("Vyplňte prosím údaje o novém zákazníkovi."); return; }
@@ -123,31 +92,39 @@ const Reservations: React.FC = () => {
             return;
         }
 
+        setIsProcessing(true);
         try {
-            setLoading(true);
             let finalCustomerId = selectedCustomerId;
+            let customerForContract: Customer | undefined;
 
             if (isNewCustomer) {
-                const newCustomer = await addCustomer(newCustomerData);
+                const newCustomer = await actions.addCustomer(newCustomerData);
                 finalCustomerId = newCustomer.id;
                 customerForContract = newCustomer;
             } else {
                  customerForContract = customers.find(c => c.id === finalCustomerId);
             }
 
-            if (!customerForContract) {
-                throw new Error("Nepodařilo se nalézt data zákazníka.");
-            }
-
-            const newReservation = await addReservation({
+            if (!customerForContract) throw new Error("Nepodařilo se nalézt data zákazníka.");
+            
+            const newReservation = await actions.addReservation({
                 customerId: finalCustomerId,
                 vehicleId: selectedVehicleId,
                 startDate: new Date(startDate),
                 endDate: new Date(endDate),
             });
+            const contractVehicle = vehicles.find(v => v.id === selectedVehicleId); // Re-find vehicle from context
+            if (!contractVehicle) throw new Error("Vozidlo nebylo nalezeno.");
 
             // Generate contract text
-            const contractText = `
+            const contractText = `...`; // Contract text generation logic remains the same
+            
+            await actions.addContract({
+                reservationId: newReservation.id,
+                customerId: finalCustomerId,
+                vehicleId: selectedVehicleId,
+                generatedAt: new Date(),
+                contractText: `
 SMLOUVA O NÁJMU DOPRAVNÍHO PROSTŘEDKU
 =========================================
 
@@ -170,9 +147,9 @@ Telefon: ${customerForContract.phone}
 Článek II. - Předmět nájmu
 -----------------------------------------
 Pronajímatel tímto přenechává nájemci do dočasného užívání následující motorové vozidlo:
-Vozidlo: ${selectedVehicle?.name}
-SPZ: ${selectedVehicle?.licensePlate}
-Rok výroby: ${selectedVehicle?.year}
+Vozidlo: ${contractVehicle.name}
+SPZ: ${contractVehicle.licensePlate}
+Rok výroby: ${contractVehicle.year}
 
 Článek III. - Doba nájmu a cena
 -----------------------------------------
@@ -191,30 +168,24 @@ V případě poškození vozidla zaviněného nájemcem se sjednává spoluúča
 
 Článek VI. - Stav kilometrů a limit
 -----------------------------------------
-Počáteční stav kilometrů: ${(selectedVehicle?.currentMileage ?? 0).toLocaleString('cs-CZ')} km
+Počáteční stav kilometrů: ${(contractVehicle.currentMileage ?? 0).toLocaleString('cs-CZ')} km
 Denní limit pro nájezd je 300 km. Za každý kilometr nad tento limit (vypočítaný jako 300 km * počet dní pronájmu) bude účtován poplatek 3 Kč/km.
 
 Článek VII. - Závěrečná ustanovení
 -----------------------------------------
 Tato smlouva je vyhotovena elektronicky. Nájemce svým digitálním podpisem stvrzuje, že se seznámil s obsahem smlouvy, souhlasí s ním a vozidlo v uvedeném stavu přebírá.
-            `;
-            
-            await addContract({
-                reservationId: newReservation.id,
-                customerId: finalCustomerId,
-                vehicleId: selectedVehicleId,
-                generatedAt: new Date(),
-                contractText: contractText
+            `
             });
 
             const bccEmail = "smlouvydodavky@gmail.com";
             const mailtoBody = encodeURIComponent(contractText);
-            const mailtoLink = `mailto:${customerForContract.email}?bcc=${bccEmail}&subject=${encodeURIComponent(`Smlouva o pronájmu vozidla ${selectedVehicle?.name}`)}&body=${mailtoBody}`;
+            const mailtoLink = `mailto:${customerForContract.email}?bcc=${bccEmail}&subject=${encodeURIComponent(`Smlouva o pronájmu vozidla ${contractVehicle.name}`)}&body=${mailtoBody}`;
             
             window.location.href = mailtoLink;
 
             alert("Rezervace byla úspěšně vytvořena a smlouva uložena! Nyní budete přesměrováni do emailového klienta pro odeslání smlouvy.");
             
+            // Reset form
             setSelectedCustomerId('');
             setIsNewCustomer(false);
             setNewCustomerData({ firstName: '', lastName: '', email: '', phone: '', driverLicenseNumber: '', address: '' });
@@ -227,7 +198,7 @@ Tato smlouva je vyhotovena elektronicky. Nájemce svým digitálním podpisem st
             console.error("Failed to create reservation:", error);
             alert(`Chyba při vytváření rezervace: ${error instanceof Error ? error.message : "Neznámá chyba"}`);
         } finally {
-            setLoading(false);
+            setIsProcessing(false);
         }
     };
     
@@ -393,8 +364,8 @@ Tato smlouva je vyhotovena elektronicky. Nájemce svým digitálním podpisem st
                                 </p>
                             </div>
                         </div>
-                         <button type="submit" className="w-full mt-6 bg-secondary text-dark-text font-bold py-3 rounded-lg hover:bg-secondary-hover transition-colors text-lg" disabled={loading}>
-                            {loading ? 'Zpracovávám...' : 'Vytvořit rezervaci a smlouvu'}
+                         <button type="submit" className="w-full mt-6 bg-secondary text-dark-text font-bold py-3 rounded-lg hover:bg-secondary-hover transition-colors text-lg" disabled={isProcessing}>
+                            {isProcessing ? 'Zpracovávám...' : 'Vytvořit rezervaci a smlouvu'}
                         </button>
                     </div>
                 </div>

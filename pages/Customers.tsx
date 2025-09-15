@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { getCustomers } from '../services/api';
+import React, { useState } from 'react';
 import type { Customer } from '../types';
 import { Plus, User, Mail, Phone, Edit, MapPin } from 'lucide-react';
 import CustomerFormModal from '../components/CustomerFormModal';
+import { useData } from '../contexts/DataContext';
 
 const CustomerCard: React.FC<{ customer: Customer; onEdit: (customer: Customer) => void }> = ({ customer, onEdit }) => {
     return (
@@ -32,26 +32,11 @@ const CustomerCard: React.FC<{ customer: Customer; onEdit: (customer: Customer) 
 
 
 const Customers: React.FC = () => {
-    const [customers, setCustomers] = useState<Customer[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { data, loading } = useData();
+    const { customers } = data;
+    
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-
-    const fetchCustomers = async () => {
-        try {
-            const data = await getCustomers();
-            setCustomers(data);
-        } catch (error) {
-            console.error("Failed to fetch customers:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        setLoading(true);
-        fetchCustomers();
-    }, []);
     
     const handleOpenModal = (customer: Customer | null = null) => {
         setSelectedCustomer(customer);
@@ -63,20 +48,13 @@ const Customers: React.FC = () => {
         setSelectedCustomer(null);
     };
 
-    const handleSaveSuccess = () => {
-        handleCloseModal();
-        fetchCustomers();
-    };
-
-
-    if (loading) return <div>Načítání zákazníků...</div>;
+    if (loading && customers.length === 0) return <div>Načítání zákazníků...</div>;
 
     return (
         <div>
              <CustomerFormModal 
                 isOpen={isModalOpen} 
                 onClose={handleCloseModal} 
-                onSaveSuccess={handleSaveSuccess} 
                 customer={selectedCustomer} 
              />
             <div className="flex justify-between items-center mb-6">

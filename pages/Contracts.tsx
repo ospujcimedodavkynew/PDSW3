@@ -1,30 +1,13 @@
-
-
-import React, { useEffect, useState } from 'react';
-import { getContracts } from '../services/api';
+import React, { useState } from 'react';
 import type { Contract } from '../types';
+import { useData } from '../contexts/DataContext';
 
 const Contracts: React.FC = () => {
-    const [contracts, setContracts] = useState<Contract[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { data, loading } = useData();
+    const { contracts } = data;
     const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
 
-    useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            try {
-                const data = await getContracts();
-                setContracts(data);
-            } catch (error) {
-                console.error("Failed to fetch contracts:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, []);
-
-    if (loading) return <div>Načítání smluv...</div>;
+    if (loading && contracts.length === 0) return <div>Načítání smluv...</div>;
     
     if (selectedContract) {
         return (

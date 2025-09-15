@@ -1,7 +1,7 @@
 import React from 'react';
 import { Page } from '../types';
-import { LayoutDashboard, Car, Users, FileText, DollarSign, LogOut, Calendar, ClipboardList } from 'lucide-react';
-import { signOut } from '../services/api';
+import { LayoutDashboard, Car, Users, FileText, DollarSign, LogOut, Calendar, ClipboardList, BarChart } from 'lucide-react';
+import { useData } from '../contexts/DataContext';
 
 interface SidebarProps {
     currentPage: Page;
@@ -9,6 +9,8 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage }) => {
+    const { actions } = useData();
+
     const navItems = [
         { page: Page.DASHBOARD, label: 'Přehled', icon: LayoutDashboard },
         { page: Page.RESERVATIONS, label: 'Rezervace', icon: ClipboardList },
@@ -17,12 +19,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage }) => {
         { page: Page.CUSTOMERS, label: 'Zákazníci', icon: Users },
         { page: Page.CONTRACTS, label: 'Smlouvy', icon: FileText },
         { page: Page.FINANCIALS, label: 'Finance', icon: DollarSign },
+        { page: Page.REPORTS, label: 'Reporty', icon: BarChart },
     ];
     
     const handleSignOut = async () => {
         try {
-            await signOut();
-            // The onAuthStateChange listener in App.tsx will handle the redirect.
+            await actions.signOut();
+            // The onAuthStateChange listener in DataContext will handle the state update.
         } catch (error) {
             console.error("Failed to sign out:", error);
             alert("Odhlášení se nezdařilo.");

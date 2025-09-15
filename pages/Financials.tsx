@@ -1,16 +1,15 @@
-
-import React, { useEffect, useState, useMemo, FormEvent } from 'react';
-import { getFinancials, addExpense } from '../services/api';
+import React, { useState, useMemo, FormEvent } from 'react';
 import type { FinancialTransaction } from '../types';
 import { DollarSign, TrendingUp, TrendingDown, Plus, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useData } from '../contexts/DataContext';
 
 // Modal pro zadávání výdajů
 const ExpenseFormModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
-    onSave: () => void;
-}> = ({ isOpen, onClose, onSave }) => {
+}> = ({ isOpen, onClose }) => {
+    const { actions } = useData();
     const [description, setDescription] = useState('');
     const [amount, setAmount] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -26,12 +25,11 @@ const ExpenseFormModal: React.FC<{
         }
         setIsSaving(true);
         try {
-            await addExpense({
+            await actions.addExpense({
                 description,
                 amount: parseFloat(amount),
                 date: new Date(date),
             });
-            onSave();
             onClose();
             // Reset form
             setDescription('');
@@ -72,25 +70,9 @@ const ExpenseFormModal: React.FC<{
 
 
 const Financials: React.FC = () => {
-    const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { data, loading } = useData();
+    const { financials: transactions } = data;
     const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
-
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const data = await getFinancials();
-            setTransactions(data);
-        } catch (error) {
-            console.error("Failed to fetch financials:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-    
-    useEffect(() => {
-        fetchData();
-    }, []);
 
     const { totalIncome, totalExpense, netProfit } = useMemo(() => {
         const income = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
@@ -120,14 +102,13 @@ const Financials: React.FC = () => {
     })).reverse();
 
 
-    if (loading) return <div>Načítání finančních dat...</div>;
+    if (loading && transactions.length === 0) return <div>Načítání finančních dat...</div>;
 
     return (
         <div className="space-y-6">
             <ExpenseFormModal 
                 isOpen={isExpenseModalOpen}
                 onClose={() => setIsExpenseModalOpen(false)}
-                onSave={fetchData}
             />
             <div className="flex justify-between items-center">
                  <h1 className="text-3xl font-bold text-gray-800">Finance</h1>

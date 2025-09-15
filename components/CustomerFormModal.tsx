@@ -1,16 +1,17 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import type { Customer } from '../types';
 import { X } from 'lucide-react';
-import { addCustomer, updateCustomer } from '../services/api';
+import { useData } from '../contexts/DataContext';
 
 interface CustomerFormModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSaveSuccess: () => void;
     customer: Partial<Customer> | null;
 }
 
-const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, onClose, onSaveSuccess, customer }) => {
+const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, onClose, customer }) => {
+    const { actions } = useData();
+    
     const getInitialData = (c: Partial<Customer> | null): Partial<Customer> => c || {
         firstName: '', lastName: '', email: '', phone: '', driverLicenseNumber: '', address: ''
     };
@@ -32,11 +33,11 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, onClose, 
         setError(null);
         try {
             if (formData.id) {
-                await updateCustomer(formData as Customer);
+                await actions.updateCustomer(formData as Customer);
             } else {
-                await addCustomer(formData as Omit<Customer, 'id'>);
+                await actions.addCustomer(formData as Omit<Customer, 'id'>);
             }
-            onSaveSuccess();
+            onClose();
         } catch (err) {
             console.error("Failed to save customer:", err);
             setError(err instanceof Error ? err.message : 'Uložení zákazníka se nezdařilo');

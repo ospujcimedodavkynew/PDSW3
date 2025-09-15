@@ -1,44 +1,22 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { getVehicles, getReservations, getAllServices } from '../services/api';
+import React, { useState, useMemo } from 'react';
 import { Reservation, Vehicle, Page, VehicleService } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { Car, Users, CalendarCheck, AlertTriangle, Link, Clock, ArrowRightLeft, Wrench } from 'lucide-react';
 import ReservationDetailModal from '../components/ReservationDetailModal';
 import SelfServiceModal from '../components/SelfServiceModal';
+import { useData } from '../contexts/DataContext';
 
 
 const COLORS = { available: '#22C55E', rented: '#F59E0B', maintenance: '#EF4444' };
 
 const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurrentPage }) => {
-    const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-    const [reservations, setReservations] = useState<Reservation[]>([]);
-    const [services, setServices] = useState<VehicleService[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { data, loading, actions } = useData();
+    const { vehicles, reservations, services } = data;
+
     const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [isSelfServiceModalOpen, setIsSelfServiceModalOpen] = useState(false);
 
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const [vehiclesData, reservationsData, servicesData] = await Promise.all([
-                getVehicles(), 
-                getReservations(),
-                getAllServices()
-            ]);
-            setVehicles(vehiclesData);
-            setReservations(reservationsData);
-            setServices(servicesData);
-        } catch (error) {
-            console.error("Failed to fetch dashboard data:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchData();
-    }, []);
 
     const serviceAlerts = useMemo(() => {
         const today = new Date();
@@ -47,8 +25,8 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
 
         return services.filter(s => 
             s.status === 'planned' &&
-            s.serviceDate > today &&
-            s.serviceDate <= thirtyDaysFromNow
+            new Date(s.serviceDate) > today &&
+            new Date(s.serviceDate) <= thirtyDaysFromNow
         );
     }, [services]);
 
@@ -87,17 +65,23 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
     const handleCloseModal = () => {
         setIsDetailModalOpen(false);
         setSelectedReservation(null);
-        fetchData();
+        // Data will be refreshed by the context if an action was taken
     };
+    
+    const onSelfServiceLinkGenerated = () => {
+        // We might need a more targeted refresh here in the future,
+        // but for now, the context handles broader updates.
+        actions.refreshData();
+    }
 
-    if (loading) return <div>Načítání přehledu...</div>;
+    if (loading && vehicles.length === 0) return <div>Načítání přehledu...</div>;
     
     const hasAlerts = maintenanceVehicles.length > 0 || serviceAlerts.length > 0;
 
     return (
         <div className="space-y-6">
             <ReservationDetailModal isOpen={isDetailModalOpen} onClose={handleCloseModal} reservation={selectedReservation} />
-            <SelfServiceModal isOpen={isSelfServiceModalOpen} onClose={() => setIsSelfServiceModalOpen(false)} availableVehicles={vehicles.filter(v => v.status === 'available')} onLinkGenerated={fetchData} />
+            <SelfServiceModal isOpen={isSelfServiceModalOpen} onClose={() => setIsSelfServiceModalOpen(false)} availableVehicles={vehicles.filter(v => v.status === 'available')} onLinkGenerated={onSelfServiceLinkGenerated} />
 
             {/* Header */}
             <div className="flex justify-between items-center">

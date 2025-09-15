@@ -1,7 +1,7 @@
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import './contexts/DataContext.tsx'; // Ensure the context file is part of the bundle
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

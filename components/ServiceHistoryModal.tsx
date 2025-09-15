@@ -2,7 +2,8 @@ import React, { useState, useEffect, FormEvent } from 'react';
 // FIX: Replaced non-existent 'Tool' icon with 'Hammer'
 import { X, Loader, Calendar, Wrench, Plus, CheckCircle, Hammer } from 'lucide-react';
 import { Vehicle, VehicleService } from '../types';
-import { getServicesForVehicle, addService, updateService } from '../services/api';
+import { getServicesForVehicle } from '../services/api';
+import { useData } from '../contexts/DataContext';
 
 interface ServiceHistoryModalProps {
     isOpen: boolean;
@@ -11,6 +12,7 @@ interface ServiceHistoryModalProps {
 }
 
 const ServiceHistoryModal: React.FC<ServiceHistoryModalProps> = ({ isOpen, onClose, vehicle }) => {
+    const { actions } = useData();
     const [services, setServices] = useState<VehicleService[]>([]);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -26,6 +28,7 @@ const ServiceHistoryModal: React.FC<ServiceHistoryModalProps> = ({ isOpen, onClo
         if (vehicle) {
             setLoading(true);
             try {
+                // We still fetch per-vehicle details here as it's specific
                 const data = await getServicesForVehicle(vehicle.id);
                 setServices(data);
             } catch (error) {
@@ -55,7 +58,7 @@ const ServiceHistoryModal: React.FC<ServiceHistoryModalProps> = ({ isOpen, onClo
         if (!vehicle) return;
         setIsSaving(true);
         try {
-            await addService({
+            await actions.addService({
                 vehicleId: vehicle.id,
                 description,
                 serviceDate: new Date(serviceDate),
@@ -64,7 +67,7 @@ const ServiceHistoryModal: React.FC<ServiceHistoryModalProps> = ({ isOpen, onClo
                 status,
             });
             resetForm();
-            fetchServices();
+            await fetchServices(); // Re-fetch specific vehicle services
         } catch (error) {
             alert('Nepodařilo se uložit servisní záznam.');
             console.error(error);
@@ -77,8 +80,8 @@ const ServiceHistoryModal: React.FC<ServiceHistoryModalProps> = ({ isOpen, onClo
         const confirmed = window.confirm(`Opravdu chcete označit servisní úkon "${service.description}" jako dokončený?`);
         if (confirmed) {
             try {
-                await updateService(service.id, { status: 'completed' });
-                fetchServices();
+                await actions.updateService(service.id, { status: 'completed' });
+                await fetchServices(); // Re-fetch specific vehicle services
             } catch (error) {
                 alert('Nepodařilo se aktualizovat záznam.');
                 console.error(error);
