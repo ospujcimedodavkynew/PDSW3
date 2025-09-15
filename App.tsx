@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
 import Reservations from './pages/Reservations';
+import Calendar from './pages/Calendar'; // Přidán import
 import Vehicles from './pages/Vehicles';
 import Customers from './pages/Customers';
 import Contracts from './pages/Contracts';
@@ -79,6 +80,8 @@ function App() {
         return <Dashboard setCurrentPage={setCurrentPage} />;
       case Page.RESERVATIONS:
         return <Reservations />;
+      case Page.CALENDAR: // Přidána nová cesta
+        return <Calendar />;
       case Page.VEHICLES:
         return <Vehicles />;
       case Page.CUSTOMERS:

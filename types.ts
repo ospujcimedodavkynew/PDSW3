@@ -2,6 +2,7 @@
 export enum Page {
     DASHBOARD = 'dashboard',
     RESERVATIONS = 'reservations',
+    CALENDAR = 'calendar',
     VEHICLES = 'vehicles',
     CUSTOMERS = 'customers',
     CONTRACTS = 'contracts',
