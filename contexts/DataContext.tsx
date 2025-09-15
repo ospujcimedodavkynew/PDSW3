@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import * as api from '../services/api';
 import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage } from '../types';
+import { Session } from '@supabase/supabase-js';
+
 
 interface AppData {
     vehicles: Vehicle[];
@@ -30,6 +32,7 @@ interface DataContextState {
     data: AppData;
     loading: boolean;
     actions: DataContextActions;
+    session: Session | null;
 }
 
 const DataContext = createContext<DataContextState | undefined>(undefined);
@@ -77,10 +80,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [data, setData] = useState<AppData>({
         vehicles: [], customers: [], reservations: [], contracts: [], financials: [], services: [],
     });
-    const [loading, setLoading] = useState(true);
+    const [session, setSession] = useState<Session | null>(null);
+    const [authLoading, setAuthLoading] = useState(true);
+    const [dataLoading, setDataLoading] = useState(true);
+
+    useEffect(() => {
+        // Immediately try to get the session to see if the user is already logged in.
+        api.getSession().then(({ data: { session } }) => {
+            setSession(session);
+            setAuthLoading(false);
+        });
+
+        // Listen for future changes in auth state.
+        const subscription = api.onAuthStateChange((session) => {
+            setSession(session);
+        });
+
+        // Cleanup the subscription when the component unmounts.
+        return () => {
+            subscription?.unsubscribe();
+        };
+    }, []);
 
     const refreshData = useCallback(async () => {
-        setLoading(true);
+        setDataLoading(true);
         try {
             const fetchedData = await api.getAllData();
             const expanded = expandData(fetchedData);
@@ -88,13 +111,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (error) {
             console.error("Failed to fetch data", error);
         } finally {
-            setLoading(false);
+            setDataLoading(false);
         }
     }, []);
 
     useEffect(() => {
-        refreshData();
-    }, [refreshData]);
+        // If there's a user session, fetch data.
+        if (session) {
+            refreshData();
+        } else {
+            // If the user logs out, clear data and stop loading.
+            setData({ vehicles: [], customers: [], reservations: [], contracts: [], financials: [], services: [] });
+            setDataLoading(false);
+        }
+    }, [session, refreshData]);
 
     const actions = useMemo((): DataContextActions => ({
         refreshData,
@@ -190,7 +220,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }), [refreshData]);
 
-    const value = { data, loading, actions };
+    const value = { data, loading: authLoading || (!!session && dataLoading), actions, session };
 
     return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };

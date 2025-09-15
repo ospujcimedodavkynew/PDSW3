@@ -1,6 +1,9 @@
 // MOCK API - In a real application, this would be replaced with actual API calls to a backend (e.g., Firebase, REST API).
 
 import { Customer, Reservation, Vehicle, VehicleDamage, VehicleService, FinancialTransaction, Contract } from './types';
+import { supabase } from './supabaseClient';
+import { Session } from '@supabase/supabase-js';
+
 
 // Simulate a delay
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
@@ -45,19 +48,30 @@ export const getAllData = async (): Promise<{
 
 // --- AUTH ---
 export const signInWithPassword = async (email: string, password: string): Promise<any> => {
-    await delay(1000);
-    if (email === 'admin@admin.com' && password === 'password') {
-        localStorage.setItem('user', JSON.stringify({ email }));
-        window.dispatchEvent(new Event('storage')); // Simulate auth change
-        return { user: { email } };
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+        if (error.message.includes("Invalid login credentials")) {
+            throw new Error("Nesprávné přihlašovací údaje.");
+        }
+        throw error;
     }
-    throw new Error('Nesprávné přihlašovací údaje.');
+    return data;
 };
 
 export const signOut = async (): Promise<void> => {
-    await delay(500);
-    localStorage.removeItem('user');
-    window.dispatchEvent(new Event('storage')); // Simulate auth change
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+};
+
+export const getSession = () => {
+    return supabase.auth.getSession();
+}
+
+export const onAuthStateChange = (callback: (session: Session | null) => void) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        callback(session);
+    });
+    return subscription;
 };
 
 
