@@ -1,0 +1,5 @@
+{
+  "name": "Van Rental Management System",
+  "description": "A comprehensive web application for managing a van rental business, including vehicle and customer management, reservations, contract generation, and financial tracking. Built with React, TypeScript, and Tailwind CSS, designed to work with a Supabase backend.",
+  "requestFramePermissions": []
+}

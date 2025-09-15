@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Van Rental Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'primary': '#1E40AF',
+              'primary-hover': '#1D4ED8',
+              'secondary': '#FBBF24',
+              'secondary-hover': '#F59E0B',
+              'light-bg': '#F3F4F6',
+              'dark-text': '#111827',
+              'medium-text': '#4B5563',
+              'light-text': '#F9FAFB',
+            }
+          }
+        }
+      }
+    </script>
+    
+    <!-- === KLÍČOVÁ ZMĚNA ZDE === -->
+    <!-- Tento skript nastaví vaše klíče tak, aby je aplikace mohla bezpečně načíst. -->
+    <!-- Nahraďte placeholder hodnoty vašimi skutečnými klíči ze Supabase. -->
+    <script>
+      window.env = {
+        VITE_SUPABASE_URL: "https://vasedomena.supabase.co", // <-- VLOŽTE VAŠI SUPABASE URL
+        VITE_SUPABASE_ANON_KEY: "vas_anon_public_klic" // <-- VLOŽTE VÁŠ SUPABASE ANON KEY
+      };
+    </script>
+    <!-- ========================== -->
+
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "recharts": "https://aistudiocdn.com/recharts@^3.2.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.543.0",
+    "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-light-bg text-dark-text">
+<div id="root"></div>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
