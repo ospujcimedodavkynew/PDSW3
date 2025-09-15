@@ -75,3 +75,28 @@ export interface FinancialTransaction {
     description: string;
     type: 'income' | 'expense';
 }
+
+// Represents a single damage report for a vehicle
+export interface VehicleDamage {
+    id: string;
+    vehicleId: string;
+    reservationId?: string;
+    description: string;
+    location: string;
+    imageUrl: string;
+    reportedAt: Date;
+    status: 'reported' | 'repaired';
+    reservation?: Partial<Reservation>; // For linking in history
+}
+
+// Represents a service record for a vehicle
+export interface VehicleService {
+    id: string;
+    vehicleId: string;
+    description: string;
+    serviceDate: Date;
+    cost?: number;
+    notes?: string;
+    status: 'planned' | 'completed';
+    vehicle?: Pick<Vehicle, 'name' | 'licensePlate' | 'currentMileage'>;
+}

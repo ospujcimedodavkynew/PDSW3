@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { getVehicles, getReservations } from '../services/api';
-import { Reservation, Vehicle, Page } from '../types';
+import React, { useEffect, useState, useMemo } from 'react';
+import { getVehicles, getReservations, getAllServices } from '../services/api';
+import { Reservation, Vehicle, Page, VehicleService } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { Car, Users, CalendarCheck, AlertTriangle, Link, Clock, ArrowRightLeft } from 'lucide-react';
+import { Car, Users, CalendarCheck, AlertTriangle, Link, Clock, ArrowRightLeft, Wrench } from 'lucide-react';
 import ReservationDetailModal from '../components/ReservationDetailModal';
 import SelfServiceModal from '../components/SelfServiceModal';
 
@@ -12,6 +12,7 @@ const COLORS = { available: '#22C55E', rented: '#F59E0B', maintenance: '#EF4444'
 const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurrentPage }) => {
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [reservations, setReservations] = useState<Reservation[]>([]);
+    const [services, setServices] = useState<VehicleService[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -20,9 +21,14 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [vehiclesData, reservationsData] = await Promise.all([getVehicles(), getReservations()]);
+            const [vehiclesData, reservationsData, servicesData] = await Promise.all([
+                getVehicles(), 
+                getReservations(),
+                getAllServices()
+            ]);
             setVehicles(vehiclesData);
             setReservations(reservationsData);
+            setServices(servicesData);
         } catch (error) {
             console.error("Failed to fetch dashboard data:", error);
         } finally {
@@ -33,6 +39,18 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
     useEffect(() => {
         fetchData();
     }, []);
+
+    const serviceAlerts = useMemo(() => {
+        const today = new Date();
+        const thirtyDaysFromNow = new Date();
+        thirtyDaysFromNow.setDate(today.getDate() + 30);
+
+        return services.filter(s => 
+            s.status === 'planned' &&
+            s.serviceDate > today &&
+            s.serviceDate <= thirtyDaysFromNow
+        );
+    }, [services]);
 
     const vehicleStatusData = [
         { name: 'K dispozici', value: vehicles.filter(v => v.status === 'available').length },
@@ -73,6 +91,8 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
     };
 
     if (loading) return <div>Načítání přehledu...</div>;
+    
+    const hasAlerts = maintenanceVehicles.length > 0 || serviceAlerts.length > 0;
 
     return (
         <div className="space-y-6">
@@ -121,10 +141,21 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                 </div>
                  <div className="bg-white p-6 rounded-lg shadow-md">
                     <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center"><AlertTriangle className="mr-2 text-red-500"/>Upozornění</h2>
-                    {maintenanceVehicles.length > 0 ? (
-                        <ul className="space-y-2">
+                    {hasAlerts ? (
+                        <ul className="space-y-3">
                            {maintenanceVehicles.map(v => (
-                             <li key={v.id} className="text-gray-600"><span className="font-semibold">{v.name}</span> je v servisu.</li>
+                             <li key={v.id} className="text-gray-600 flex items-start">
+                                <Car className="w-4 h-4 mr-2 mt-1 text-red-500 flex-shrink-0"/>
+                                <span><span className="font-semibold">{v.name}</span> je v servisu.</span>
+                             </li>
+                           ))}
+                           {serviceAlerts.map(s => (
+                               <li key={s.id} className="text-gray-600 flex items-start">
+                                   <Wrench className="w-4 h-4 mr-2 mt-1 text-yellow-600 flex-shrink-0"/>
+                                   <span>
+                                    <span className="font-semibold">{s.vehicle?.name}:</span> Plánovaný servis ({s.description}) dne {new Date(s.serviceDate).toLocaleDateString('cs-CZ')}.
+                                   </span>
+                               </li>
                            ))}
                         </ul>
                     ) : <p className="text-gray-500">Žádná důležitá upozornění.</p>}

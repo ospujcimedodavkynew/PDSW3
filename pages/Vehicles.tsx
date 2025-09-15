@@ -1,9 +1,16 @@
 import React, { useEffect, useState, FormEvent } from 'react';
 import { getVehicles, addVehicle, updateVehicle } from '../services/api';
 import type { Vehicle } from '../types';
-import { Car, Wrench, CheckCircle, Plus, X, Gauge } from 'lucide-react';
+import { Car, Wrench, CheckCircle, Plus, X, Gauge, ShieldAlert } from 'lucide-react';
+import DamageHistoryModal from '../components/DamageHistoryModal';
+import ServiceHistoryModal from '../components/ServiceHistoryModal';
 
-const VehicleCard: React.FC<{ vehicle: Vehicle; onEdit: (vehicle: Vehicle) => void; }> = ({ vehicle, onEdit }) => {
+const VehicleCard: React.FC<{ 
+    vehicle: Vehicle; 
+    onEdit: (vehicle: Vehicle) => void; 
+    onShowDamage: (vehicle: Vehicle) => void; 
+    onShowService: (vehicle: Vehicle) => void;
+}> = ({ vehicle, onEdit, onShowDamage, onShowService }) => {
     const statusInfo = {
         available: { text: 'K dispozici', color: 'text-green-600', icon: <CheckCircle className="w-5 h-5" /> },
         rented: { text: 'Pronajato', color: 'text-yellow-600', icon: <Car className="w-5 h-5" /> },
@@ -32,7 +39,15 @@ const VehicleCard: React.FC<{ vehicle: Vehicle; onEdit: (vehicle: Vehicle) => vo
                     <p className="flex justify-between"><span>12 hodin:</span> <span className="font-bold text-primary">{vehicle.rate12h.toLocaleString('cs-CZ')} Kč</span></p>
                     <p className="flex justify-between"><span>1+ den:</span> <span className="font-bold text-primary">{vehicle.dailyRate.toLocaleString('cs-CZ')} Kč/den</span></p>
                 </div>
-                <button onClick={() => onEdit(vehicle)} className="w-full mt-3 bg-primary text-white py-2 rounded-lg hover:bg-primary-hover transition-colors">
+                <div className="flex space-x-2 mt-3">
+                     <button onClick={() => onShowDamage(vehicle)} className="w-full bg-red-100 text-red-700 py-2 rounded-lg hover:bg-red-200 transition-colors flex items-center justify-center text-sm font-semibold">
+                        <ShieldAlert className="w-4 h-4 mr-2"/> Poškození
+                    </button>
+                    <button onClick={() => onShowService(vehicle)} className="w-full bg-yellow-100 text-yellow-700 py-2 rounded-lg hover:bg-yellow-200 transition-colors flex items-center justify-center text-sm font-semibold">
+                        <Wrench className="w-4 h-4 mr-2"/> Servis
+                    </button>
+                </div>
+                 <button onClick={() => onEdit(vehicle)} className="w-full mt-2 bg-primary text-white py-2 rounded-lg hover:bg-primary-hover transition-colors text-sm font-semibold">
                     Upravit
                 </button>
             </div>
@@ -160,8 +175,10 @@ const VehicleFormModal: React.FC<{
 const Vehicles: React.FC = () => {
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedVehicle, setSelectedVehicle] = useState<Partial<Vehicle> | null>(null);
+    const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+    const [isDamageModalOpen, setIsDamageModalOpen] = useState(false);
+    const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
+    const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
 
     const fetchVehiclesData = async () => {
         setLoading(true);
@@ -179,18 +196,38 @@ const Vehicles: React.FC = () => {
         fetchVehiclesData();
     }, []);
 
-    const handleOpenModal = (vehicle: Vehicle | null = null) => {
+    const handleOpenFormModal = (vehicle: Vehicle | null = null) => {
         setSelectedVehicle(vehicle);
-        setIsModalOpen(true);
+        setIsFormModalOpen(true);
     };
 
-    const handleCloseModal = () => {
-        setIsModalOpen(false);
+    const handleCloseFormModal = () => {
+        setIsFormModalOpen(false);
+        setSelectedVehicle(null);
+    };
+    
+    const handleOpenDamageModal = (vehicle: Vehicle) => {
+        setSelectedVehicle(vehicle);
+        setIsDamageModalOpen(true);
+    };
+
+    const handleCloseDamageModal = () => {
+        setIsDamageModalOpen(false);
+        setSelectedVehicle(null);
+    };
+
+    const handleOpenServiceModal = (vehicle: Vehicle) => {
+        setSelectedVehicle(vehicle);
+        setIsServiceModalOpen(true);
+    };
+
+    const handleCloseServiceModal = () => {
+        setIsServiceModalOpen(false);
         setSelectedVehicle(null);
     };
 
     const handleSave = () => {
-        handleCloseModal();
+        handleCloseFormModal();
         fetchVehiclesData();
     };
 
@@ -198,17 +235,27 @@ const Vehicles: React.FC = () => {
 
     return (
         <div>
-            <VehicleFormModal isOpen={isModalOpen} onClose={handleCloseModal} onSave={handleSave} vehicle={selectedVehicle} />
+            <VehicleFormModal isOpen={isFormModalOpen} onClose={handleCloseFormModal} onSave={handleSave} vehicle={selectedVehicle} />
+            <DamageHistoryModal isOpen={isDamageModalOpen} onClose={handleCloseDamageModal} vehicle={selectedVehicle} />
+            <ServiceHistoryModal isOpen={isServiceModalOpen} onClose={handleCloseServiceModal} vehicle={selectedVehicle} />
+
+
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Vozový park</h1>
-                <button onClick={() => handleOpenModal()} className="bg-secondary text-dark-text font-bold py-2 px-4 rounded-lg hover:bg-secondary-hover transition-colors flex items-center">
+                <button onClick={() => handleOpenFormModal()} className="bg-secondary text-dark-text font-bold py-2 px-4 rounded-lg hover:bg-secondary-hover transition-colors flex items-center">
                     <Plus className="w-5 h-5 mr-2" />
                     Přidat vozidlo
                 </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {vehicles.map(vehicle => (
-                    <VehicleCard key={vehicle.id} vehicle={vehicle} onEdit={handleOpenModal} />
+                    <VehicleCard 
+                        key={vehicle.id} 
+                        vehicle={vehicle} 
+                        onEdit={handleOpenFormModal} 
+                        onShowDamage={handleOpenDamageModal}
+                        onShowService={handleOpenServiceModal}
+                    />
                 ))}
             </div>
         </div>

@@ -1,5 +1,5 @@
 import { createClient, Session } from '@supabase/supabase-js';
-import type { Vehicle, Customer, Reservation, Contract, FinancialTransaction } from '../types';
+import type { Vehicle, Customer, Reservation, Contract, FinancialTransaction, VehicleDamage, VehicleService } from '../types';
 
 // Načtení konfigurace z globálního objektu window, který je definován v index.html
 const env = (window as any).env || {};
@@ -150,6 +150,33 @@ const toFinancialTransaction = (dbTransaction: any): FinancialTransaction => ({
     date: new Date(dbTransaction.date),
     description: dbTransaction.description,
     type: dbTransaction.type,
+});
+
+const toVehicleDamage = (dbDamage: any): VehicleDamage => ({
+    id: dbDamage.id,
+    vehicleId: dbDamage.vehicle_id,
+    reservationId: dbDamage.reservation_id,
+    description: dbDamage.description,
+    location: dbDamage.location,
+    imageUrl: dbDamage.image_url,
+    reportedAt: new Date(dbDamage.reported_at),
+    status: dbDamage.status,
+    reservation: dbDamage.reservations ? toReservation(dbDamage.reservations) : undefined,
+});
+
+const toVehicleService = (dbService: any): VehicleService => ({
+    id: dbService.id,
+    vehicleId: dbService.vehicle_id,
+    description: dbService.description,
+    serviceDate: new Date(dbService.service_date),
+    cost: dbService.cost,
+    notes: dbService.notes,
+    status: dbService.status,
+    vehicle: dbService.vehicles ? { 
+        name: dbService.vehicles.name, 
+        licensePlate: dbService.vehicles.license_plate,
+        currentMileage: dbService.vehicles.current_mileage 
+    } : undefined,
 });
 
 
@@ -458,4 +485,110 @@ export const addExpense = async (expenseData: { amount: number; date: Date; desc
         .single();
     handleSupabaseError(error, 'addExpense');
     return toFinancialTransaction(data);
+};
+
+// --- Vehicle Damage API ---
+
+export const getDamagesForVehicle = async (vehicleId: string): Promise<VehicleDamage[]> => {
+    const { data, error } = await getClient()
+        .from('vehicle_damages')
+        .select('*, reservations(*, customers(*))') // Join reservation and customer for context
+        .eq('vehicle_id', vehicleId)
+        .order('reported_at', { ascending: false });
+    handleSupabaseError(error, 'getDamagesForVehicle');
+    return (data || []).map(toVehicleDamage);
+};
+
+export const addDamage = async (
+    damageData: Omit<VehicleDamage, 'id' | 'imageUrl' | 'reportedAt' | 'status'> & { imageFile: File }
+): Promise<VehicleDamage> => {
+    const client = getClient();
+    const { vehicleId, reservationId, imageFile } = damageData;
+
+    // 1. Upload image to 'damages' bucket
+    const filePath = `${vehicleId}/${reservationId || 'general'}/${Date.now()}-${imageFile.name}`;
+    const { error: uploadError } = await client.storage
+        .from('damages')
+        .upload(filePath, imageFile);
+    handleSupabaseError(uploadError, 'addDamage - image upload');
+
+    // 2. Get public URL
+    const { data: { publicUrl } } = client.storage
+        .from('damages')
+        .getPublicUrl(filePath);
+
+    // 3. Insert damage record into the database
+    const { data, error } = await client
+        .from('vehicle_damages')
+        .insert({
+            vehicle_id: vehicleId,
+            reservation_id: reservationId,
+            description: damageData.description,
+            location: damageData.location,
+            image_url: publicUrl,
+            status: 'reported',
+            reported_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+    handleSupabaseError(error, 'addDamage - insert record');
+
+    return toVehicleDamage(data);
+};
+
+
+// --- Vehicle Service API ---
+
+export const getServicesForVehicle = async (vehicleId: string): Promise<VehicleService[]> => {
+    const { data, error } = await getClient()
+        .from('vehicle_services')
+        .select('*')
+        .eq('vehicle_id', vehicleId)
+        .order('service_date', { ascending: false });
+    handleSupabaseError(error, 'getServicesForVehicle');
+    return (data || []).map(toVehicleService);
+};
+
+export const getAllServices = async (): Promise<VehicleService[]> => {
+    const { data, error } = await getClient()
+        .from('vehicle_services')
+        .select('*, vehicles(name, license_plate, current_mileage)')
+        .order('service_date', { ascending: true });
+    handleSupabaseError(error, 'getAllServices');
+    return (data || []).map(toVehicleService);
+}
+
+export const addService = async (serviceData: Omit<VehicleService, 'id' | 'vehicle'>): Promise<VehicleService> => {
+    const { data, error } = await getClient()
+        .from('vehicle_services')
+        .insert({
+            vehicle_id: serviceData.vehicleId,
+            description: serviceData.description,
+            service_date: serviceData.serviceDate.toISOString(),
+            cost: serviceData.cost,
+            notes: serviceData.notes,
+            status: serviceData.status,
+        })
+        .select()
+        .single();
+    handleSupabaseError(error, 'addService');
+    return toVehicleService(data);
+};
+
+export const updateService = async (serviceId: string, updates: Partial<Omit<VehicleService, 'id' | 'vehicleId'>>): Promise<VehicleService> => {
+    const dbUpdates: any = {};
+    if (updates.status) dbUpdates.status = updates.status;
+    if (updates.description) dbUpdates.description = updates.description;
+    if (updates.cost) dbUpdates.cost = updates.cost;
+    if (updates.notes) dbUpdates.notes = updates.notes;
+    if (updates.serviceDate) dbUpdates.service_date = updates.serviceDate.toISOString();
+    
+    const { data, error } = await getClient()
+        .from('vehicle_services')
+        .update(dbUpdates)
+        .eq('id', serviceId)
+        .select()
+        .single();
+    handleSupabaseError(error, 'updateService');
+    return toVehicleService(data);
 };
