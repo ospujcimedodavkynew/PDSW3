@@ -6,12 +6,14 @@ import { CheckCircle, Loader } from 'lucide-react';
 /**
  * Robustně parsuje string z datetime-local inputu.
  * Zabraňuje nespolehlivému chování `new Date(string)` napříč prohlížeči.
- * @param dateTimeString - String ve formátu YYYY-MM-DDTHH:mm
+ * @param dateTimeString - String ve formátu YYYY-MM-DDTHH:mm nebo YYYY-MM-DD HH:mm
  * @returns Platný Date objekt nebo null, pokud je formát neplatný.
  */
 const parseDateTimeLocal = (dateTimeString: string): Date | null => {
     if (!dateTimeString) return null;
-    const match = dateTimeString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+    // PŮVODNÍ CHYBA: Regex očekával POUZE "T" jako oddělovač.
+    // FINÁLNÍ OPRAVA: Regex nyní akceptuje "T" NEBO mezeru ([T\s]), což pokrývá chování mobilních prohlížečů a definitivně řeší problém.
+    const match = dateTimeString.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})$/);
     if (!match) return null;
     
     const [, year, month, day, hours, minutes] = match.map(Number);
