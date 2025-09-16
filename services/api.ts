@@ -65,8 +65,8 @@ const fromReservation = (r: any): Reservation => r && ({
     id: r.id,
     customerId: r.customer_id,
     vehicleId: r.vehicle_id,
-    startDate: r.start_date,
-    endDate: r.end_date,
+    startDate: new Date(r.start_date),
+    endDate: new Date(r.end_date),
     status: r.status,
     startMileage: r.start_mileage,
     endMileage: r.end_mileage,
@@ -98,7 +98,7 @@ const fromContract = (c: any): Contract => c && ({
     reservationId: c.reservation_id,
     customerId: c.customer_id,
     vehicleId: c.vehicle_id,
-    generatedAt: c.generated_at,
+    generatedAt: new Date(c.generated_at),
     contractText: c.contract_text,
 });
 
@@ -120,7 +120,7 @@ const fromFinancial = (f: any): FinancialTransaction => f && ({
     id: f.id,
     type: f.type,
     amount: f.amount,
-    date: f.date,
+    date: new Date(f.date),
     description: f.description,
     reservationId: f.reservation_id,
 });
@@ -136,7 +136,7 @@ const fromService = (s: any): VehicleService => s && ({
     id: s.id,
     vehicleId: s.vehicle_id,
     description: s.description,
-    serviceDate: s.service_date,
+    serviceDate: new Date(s.service_date),
     cost: s.cost,
     notes: s.notes,
     status: s.status,
@@ -156,7 +156,7 @@ const fromDamage = (d: any): VehicleDamage => d && ({
     description: d.description,
     location: d.location,
     imageUrl: d.image_url,
-    reportedAt: d.reported_at,
+    reportedAt: new Date(d.reported_at),
     status: d.status,
     reservation: d.reservation ? fromReservation(d.reservation) : undefined,
 });
