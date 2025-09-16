@@ -3,7 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = (window as any).env.VITE_SUPABASE_URL;
 const supabaseAnonKey = (window as any).env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('vasedomena')) {
+// Robust check to see if the placeholder values are still present.
+if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('!!!') || supabaseAnonKey.includes('!!!')) {
     const errorDiv = document.getElementById('root');
     if(errorDiv) {
         errorDiv.innerHTML = `
@@ -19,6 +20,7 @@ if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('vasedomena')) {
             </div>
         `;
     }
+    // This prevents the app from proceeding and calling createClient with invalid data, which causes a crash.
     throw new Error("Supabase URL and Anon Key are required. Make sure to set them in index.html");
 }
 

@@ -241,39 +241,20 @@ export const submitCustomerDetails = async (token: string, customerData: Omit<Cu
     await updateReservation(reservation.id, { customerId: customer.id, status: 'scheduled' });
 };
 
+// --- DEFINITIVE FIX FOR ONLINE BOOKING ---
+// This function now uses the reliable RPC method.
 export const getAvailableVehicles = async (startDate: string, endDate: string): Promise<Vehicle[]> => {
-    // Step 1: Find all vehicle IDs that have conflicting reservations
-    const { data: conflictingReservations, error: reservationError } = await supabase
-        .from('reservations')
-        .select('vehicle_id')
-        .filter('status', 'neq', 'cancelled')
-        // A reservation conflicts if its start is before our end AND its end is after our start
-        .lt('start_date', endDate)
-        .gt('end_date', startDate);
+    const { data, error } = await supabase.rpc('get_available_vehicles', {
+        start_time: startDate,
+        end_time: endDate,
+    });
 
-    if (reservationError) {
-        console.error("Error fetching conflicting reservations:", reservationError);
-        throw reservationError;
+    if (error) {
+        console.error("Error calling get_available_vehicles function:", error);
+        throw error;
     }
 
-    const conflictingVehicleIds = conflictingReservations.map(r => r.vehicle_id);
-
-    // Step 2: Fetch all vehicles that are NOT in the conflicting list
-    let query = supabase.from('vehicles').select('*');
-    if (conflictingVehicleIds.length > 0) {
-        // Use a Set to get unique IDs
-        const uniqueIds = [...new Set(conflictingVehicleIds)];
-        query = query.not('id', 'in', `(${uniqueIds.join(',')})`);
-    }
-
-    const { data: availableVehicles, error: vehicleError } = await query;
-    
-    if (vehicleError) {
-        console.error("Error fetching available vehicles:", vehicleError);
-        throw vehicleError;
-    }
-
-    return keysToCamelCase<Vehicle[]>(availableVehicles || []);
+    return keysToCamelCase<Vehicle[]>(data || []);
 };
 
 export const createOnlineReservation = async (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>) => {
