@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { Vehicle } from '../types';
-import { Wrench, ShieldAlert, Plus, Edit } from 'lucide-react';
+import { Wrench, ShieldAlert, Plus, Edit, Search } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import ServiceHistoryModal from '../components/ServiceHistoryModal';
 import DamageHistoryModal from '../components/DamageHistoryModal';
@@ -64,6 +64,21 @@ const Vehicles: React.FC = () => {
     const [isVehicleFormModalOpen, setIsVehicleFormModalOpen] = useState(false);
     
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState<'all' | Vehicle['status']>('all');
+
+    const filteredVehicles = useMemo(() => {
+        return vehicles.filter(vehicle => {
+            const matchesStatus = statusFilter === 'all' || vehicle.status === statusFilter;
+            const matchesSearch = searchTerm === '' ||
+                vehicle.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                vehicle.licensePlate.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (vehicle.make && vehicle.make.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                (vehicle.model && vehicle.model.toLowerCase().includes(searchTerm.toLowerCase()));
+            
+            return matchesStatus && matchesSearch;
+        });
+    }, [vehicles, searchTerm, statusFilter]);
 
     const handleShowServiceHistory = (vehicle: Vehicle) => {
         setSelectedVehicle(vehicle);
@@ -89,6 +104,13 @@ const Vehicles: React.FC = () => {
 
     if (loading && vehicles.length === 0) return <div>Načítání vozového parku...</div>;
 
+    const filterButtons: { value: 'all' | Vehicle['status']; label: string }[] = [
+        { value: 'all', label: 'Všechny' },
+        { value: 'available', label: 'K dispozici' },
+        { value: 'rented', label: 'Pronajato' },
+        { value: 'maintenance', label: 'V servisu' },
+    ];
+
     return (
         <div>
             <ServiceHistoryModal isOpen={isServiceModalOpen} onClose={handleCloseModals} vehicle={selectedVehicle} />
@@ -102,8 +124,39 @@ const Vehicles: React.FC = () => {
                     Přidat vozidlo
                 </button>
             </div>
+
+            {/* Search and Filter Controls */}
+            <div className="mb-6 p-4 bg-white rounded-lg shadow-md space-y-4">
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                        type="text"
+                        placeholder="Hledat vozidlo (podle názvu, SPZ, značky...)"
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        className="w-full p-2 pl-10 border rounded-md"
+                    />
+                </div>
+                <div className="flex items-center space-x-2">
+                    <span className="font-semibold text-gray-600">Filtr stavu:</span>
+                    {filterButtons.map(({ value, label }) => (
+                        <button
+                            key={value}
+                            onClick={() => setStatusFilter(value)}
+                            className={`px-3 py-1 text-sm font-semibold rounded-full transition-colors ${
+                                statusFilter === value
+                                    ? 'bg-primary text-white'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {vehicles.map(vehicle => (
+                {filteredVehicles.map(vehicle => (
                     <VehicleCard 
                         key={vehicle.id} 
                         vehicle={vehicle}
@@ -113,6 +166,12 @@ const Vehicles: React.FC = () => {
                     />
                 ))}
             </div>
+             {filteredVehicles.length === 0 && (
+                <div className="col-span-full text-center py-10 bg-white rounded-lg shadow-md">
+                    <p className="font-semibold text-gray-700">Nebylo nalezeno žádné vozidlo</p>
+                    <p className="text-sm text-gray-500 mt-1">Zkuste upravit filtry nebo hledaný výraz.</p>
+                </div>
+            )}
         </div>
     );
 };

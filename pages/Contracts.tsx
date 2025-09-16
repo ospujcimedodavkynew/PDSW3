@@ -1,11 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { Contract } from '../types';
 import { useData } from '../contexts/DataContext';
+import { Search } from 'lucide-react';
 
 const Contracts: React.FC = () => {
     const { data, loading } = useData();
     const { contracts } = data;
     const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const filteredContracts = useMemo(() => {
+        return contracts.filter(contract => {
+            const customerName = `${contract.customer?.firstName || ''} ${contract.customer?.lastName || ''}`;
+            const vehicleName = contract.vehicle?.name || '';
+            const licensePlate = contract.vehicle?.licensePlate || '';
+            const contractId = contract.id || '';
+            
+            return searchTerm === '' ||
+                customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                vehicleName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                licensePlate.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                contractId.toLowerCase().includes(searchTerm.toLowerCase());
+        });
+    }, [contracts, searchTerm]);
 
     if (loading && contracts.length === 0) return <div>Načítání smluv...</div>;
     
@@ -58,6 +75,21 @@ const Contracts: React.FC = () => {
     return (
         <div>
             <h1 className="text-3xl font-bold text-gray-800 mb-6">Archiv smluv</h1>
+            
+            {/* Search Control */}
+            <div className="mb-6 p-4 bg-white rounded-lg shadow-md">
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                        type="text"
+                        placeholder="Hledat smlouvu (podle zákazníka, SPZ, ID...)"
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        className="w-full p-2 pl-10 border rounded-md"
+                    />
+                </div>
+            </div>
+
             <div className="bg-white rounded-lg shadow-md overflow-hidden">
                 <table className="min-w-full">
                     <thead className="bg-gray-50">
@@ -70,8 +102,8 @@ const Contracts: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                        {contracts.length > 0 ? (
-                            contracts.map(contract => (
+                        {filteredContracts.length > 0 ? (
+                            filteredContracts.map(contract => (
                                 <tr key={contract.id} className="hover:bg-gray-50">
                                     <td className="px-5 py-4 text-sm text-gray-500 font-mono">{contract.id.substring(0, 8)}...</td>
                                     <td className="px-5 py-4">{contract.customer?.firstName} {contract.customer?.lastName}</td>
@@ -85,7 +117,7 @@ const Contracts: React.FC = () => {
                         ) : (
                             <tr>
                                 <td colSpan={5} className="text-center py-10 text-gray-500">
-                                    Nebyly nalezeny žádné uložené smlouvy.
+                                    Nebyly nalezeny žádné smlouvy odpovídající hledání.
                                 </td>
                             </tr>
                         )}

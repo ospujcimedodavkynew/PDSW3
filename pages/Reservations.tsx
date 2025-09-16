@@ -113,18 +113,11 @@ const Reservations: React.FC = () => {
                 startDate: new Date(startDate),
                 endDate: new Date(endDate),
             });
-            const contractVehicle = vehicles.find(v => v.id === selectedVehicleId); // Re-find vehicle from context
+            const contractVehicle = vehicles.find(v => v.id === selectedVehicleId);
             if (!contractVehicle) throw new Error("Vozidlo nebylo nalezeno.");
 
-            // Generate contract text
-            const contractText = `...`; // Contract text generation logic remains the same
-            
-            await actions.addContract({
-                reservationId: newReservation.id,
-                customerId: finalCustomerId,
-                vehicleId: selectedVehicleId,
-                generatedAt: new Date(),
-                contractText: `
+            // Generate professional contract text
+            const contractText = `
 SMLOUVA O NÁJMU DOPRAVNÍHO PROSTŘEDKU
 =========================================
 
@@ -132,49 +125,65 @@ SMLOUVA O NÁJMU DOPRAVNÍHO PROSTŘEDKU
 -----------------------------------------
 Pronajímatel:
 Milan Gula
-Ghegova 17, Brno, 60200
-Web: Pujcimedodavky.cz
+Ghegova 117, Brno Nové Sady, 60200
+Web: pujcimedodavky.cz
 IČO: 07031653
 (dále jen "pronajímatel")
 
 Nájemce:
 Jméno: ${customerForContract.firstName} ${customerForContract.lastName}
+Adresa: ${customerForContract.address}
 Email: ${customerForContract.email}
 Telefon: ${customerForContract.phone}
 Číslo ŘP: ${customerForContract.driverLicenseNumber}
 (dále jen "nájemce")
 
-Článek II. - Předmět nájmu
+Článek II. - Předmět a účel nájmu
 -----------------------------------------
-Pronajímatel tímto přenechává nájemci do dočasného užívání následující motorové vozidlo:
-Vozidlo: ${contractVehicle.name}
-SPZ: ${contractVehicle.licensePlate}
-Rok výroby: ${contractVehicle.year}
+1. Pronajímatel tímto přenechává nájemci do dočasného užívání (nájmu) následující motorové vozidlo (dále jen "předmět nájmu" nebo "vozidlo"):
+   Vozidlo: ${contractVehicle.name} (${contractVehicle.make} ${contractVehicle.model})
+   SPZ: ${contractVehicle.licensePlate}
+   Rok výroby: ${contractVehicle.year}
+2. Nájemce se zavazuje užívat vozidlo k obvyklému účelu a v souladu s platnými právními předpisy.
 
 Článek III. - Doba nájmu a cena
 -----------------------------------------
-Doba nájmu: od ${new Date(startDate).toLocaleString('cs-CZ')} do ${new Date(endDate).toLocaleString('cs-CZ')}
-Celková cena nájmu: ${totalPrice.toLocaleString('cs-CZ')} Kč
+1. Doba nájmu je sjednána od: ${new Date(startDate).toLocaleString('cs-CZ')} do: ${new Date(endDate).toLocaleString('cs-CZ')}.
+2. Celková cena nájmu činí: ${totalPrice.toLocaleString('cs-CZ')} Kč. Cena je splatná při převzetí vozidla, není-li dohodnuto jinak.
+3. Nájemce bere na vědomí, že denní limit pro nájezd je 300 km. Za každý kilometr nad tento limit (vypočtený jako 300 km * počet dní pronájmu) bude účtován poplatek 3 Kč/km.
+   Počáteční stav kilometrů: ${(contractVehicle.currentMileage ?? 0).toLocaleString('cs-CZ')} km.
 
-Článek IV. - Práva a povinnosti
+Článek IV. - Práva a povinnosti stran
 -----------------------------------------
-1. Nájemce potvrzuje, že vozidlo převzal v řádném technickém stavu, bez zjevných závad a s kompletní povinnou výbavou.
-2. Nájemce je povinen užívat vozidlo s péčí řádného hospodáře a chránit ho před poškozením, ztrátou či zničením.
-3. Nájemce není oprávněn přenechat vozidlo do užívání třetí osobě bez předchozího písemného souhlasu pronajímatele.
+1. Nájemce svým podpisem potvrzuje, že vozidlo převzal v řádném technickém stavu, bez zjevných závad, s kompletní povinnou výbavou a s plnou nádrží pohonných hmot.
+2. Nájemce je povinen užívat vozidlo s péčí řádného hospodáře, chránit ho před poškozením, ztrátou či zničením a dodržovat pokyny výrobce pro jeho provoz.
+3. V celém vozidle je PŘÍSNĚ ZAKÁZÁNO KOUŘIT. V případě porušení tohoto zákazu je nájemce povinen uhradit smluvní pokutu ve výši 500 Kč.
+4. Nájemce je povinen vrátit vozidlo s plnou nádrží pohonných hmot. V případě vrácení vozidla s neúplnou nádrží je nájemce povinen uhradit náklady na dotankování a smluvní pokutu ve výši 500 Kč.
+5. Nájemce není oprávněn provádět na vozidle jakékoliv úpravy, přenechat ho do podnájmu třetí osobě, ani ho použít k účasti na závodech, k trestné činnosti či k přepravě nebezpečných nákladů.
 
-Článek V. - Spoluúčast a poškození vozidla
+Článek V. - Odpovědnost za škodu a spoluúčast
 -----------------------------------------
-V případě poškození vozidla zaviněného nájemcem se sjednává spoluúčast ve výši 5.000 Kč až 10.000 Kč dle rozsahu poškození. Tato spoluúčast bude hrazena nájemcem.
+1. V případě poškození předmětu nájmu zaviněného nájemcem, nebo v případě odcizení, se sjednává spoluúčast nájemce na vzniklé škodě.
+2. Výše spoluúčasti činí 5.000 Kč při poškození pronajatého vozidla.
+3. V případě dopravní nehody, při které dojde k poškození jiných vozidel nebo majetku třetích stran, činí spoluúčast 10.000 Kč.
+4. Nájemce je povinen každou dopravní nehodu, poškození vozidla nebo jeho odcizení neprodleně ohlásit pronajímateli a Policii ČR.
 
-Článek VI. - Stav kilometrů a limit
+Článek VI. - Závěrečná ustanovení
 -----------------------------------------
-Počáteční stav kilometrů: ${(contractVehicle.currentMileage ?? 0).toLocaleString('cs-CZ')} km
-Denní limit pro nájezd je 300 km. Za každý kilometr nad tento limit (vypočítaný jako 300 km * počet dní pronájmu) bude účtován poplatek 3 Kč/km.
+1. Tato smlouva nabývá platnosti a účinnosti dnem jejího podpisu oběma smluvními stranami.
+2. Smluvní strany prohlašují, že si smlouvu přečetly, s jejím obsahem souhlasí a na důkaz toho připojují své podpisy.
+3. Tato smlouva je vyhotovena elektronicky. Nájemce svým digitálním podpisem stvrzuje, že se seznámil s obsahem smlouvy, souhlasí s ním a vozidlo v uvedeném stavu přebírá.
 
-Článek VII. - Závěrečná ustanovení
------------------------------------------
-Tato smlouva je vyhotovena elektronicky. Nájemce svým digitálním podpisem stvrzuje, že se seznámil s obsahem smlouvy, souhlasí s ním a vozidlo v uvedeném stavu přebírá.
-            `
+Digitální podpis nájemce:
+(viz přiložený obrazový soubor)
+            `;
+            
+            await actions.addContract({
+                reservationId: newReservation.id,
+                customerId: finalCustomerId,
+                vehicleId: selectedVehicleId,
+                generatedAt: new Date(),
+                contractText,
             });
 
             const bccEmail = "smlouvydodavky@gmail.com";

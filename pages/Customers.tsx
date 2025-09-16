@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { Customer } from '../types';
-import { Plus, User, Mail, Phone, Edit, MapPin } from 'lucide-react';
+import { Plus, User, Mail, Phone, Edit, MapPin, Search } from 'lucide-react';
 import CustomerFormModal from '../components/CustomerFormModal';
 import { useData } from '../contexts/DataContext';
 
@@ -37,6 +37,17 @@ const Customers: React.FC = () => {
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const filteredCustomers = useMemo(() => {
+        return customers.filter(customer => {
+            const fullName = `${customer.firstName} ${customer.lastName}`;
+            return searchTerm === '' ||
+                fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                customer.phone.toLowerCase().includes(searchTerm.toLowerCase());
+        });
+    }, [customers, searchTerm]);
     
     const handleOpenModal = (customer: Customer | null = null) => {
         setSelectedCustomer(customer);
@@ -64,11 +75,32 @@ const Customers: React.FC = () => {
                     Přidat zákazníka
                 </button>
             </div>
+
+            {/* Search Control */}
+            <div className="mb-6 p-4 bg-white rounded-lg shadow-md">
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                        type="text"
+                        placeholder="Hledat zákazníka (podle jména, e-mailu, telefonu...)"
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        className="w-full p-2 pl-10 border rounded-md"
+                    />
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {customers.map(customer => (
+                {filteredCustomers.map(customer => (
                     <CustomerCard key={customer.id} customer={customer} onEdit={handleOpenModal} />
                 ))}
             </div>
+            {filteredCustomers.length === 0 && (
+                <div className="col-span-full text-center py-10 bg-white rounded-lg shadow-md">
+                    <p className="font-semibold text-gray-700">Nebyl nalezen žádný zákazník</p>
+                    <p className="text-sm text-gray-500 mt-1">Zkuste upravit hledaný výraz.</p>
+                </div>
+            )}
         </div>
     );
 };
