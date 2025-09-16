@@ -22,18 +22,18 @@ const fromVehicle = (v: any): Vehicle => v && ({
     dimensions: v.dimensions,
 });
 
-const toVehicle = (v: Partial<Vehicle>) => ({
-    ...v,
-    license_plate: v.licensePlate,
-    image_url: v.imageUrl,
-    daily_rate: v.dailyRate,
-    current_mileage: v.currentMileage,
-    // Unset camelCase versions
-    licensePlate: undefined,
-    imageUrl: undefined,
-    dailyRate: undefined,
-    currentMileage: undefined,
-});
+const toVehicle = (v: Partial<Vehicle>) => {
+    const { licensePlate, imageUrl, dailyRate, currentMileage, ...rest } = v;
+    const payload = {
+        ...rest,
+        license_plate: licensePlate,
+        image_url: imageUrl,
+        daily_rate: dailyRate,
+        current_mileage: currentMileage,
+    };
+    Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
+    return payload;
+};
 
 
 const fromCustomer = (c: any): Customer => c && ({
@@ -48,17 +48,18 @@ const fromCustomer = (c: any): Customer => c && ({
     ico: c.ico,
 });
 
-const toCustomer = (c: Partial<Customer>) => ({
-    ...c,
-    first_name: c.firstName,
-    last_name: c.lastName,
-    driver_license_number: c.driverLicenseNumber,
-    driver_license_image_url: c.driverLicenseImageUrl,
-    firstName: undefined,
-    lastName: undefined,
-    driverLicenseNumber: undefined,
-    driverLicenseImageUrl: undefined,
-});
+const toCustomer = (c: Partial<Customer>) => {
+    const { firstName, lastName, driverLicenseNumber, driverLicenseImageUrl, ...rest } = c;
+    const payload = {
+        ...rest,
+        first_name: firstName,
+        last_name: lastName,
+        driver_license_number: driverLicenseNumber,
+        driver_license_image_url: driverLicenseImageUrl,
+    };
+    Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
+    return payload;
+};
 
 const fromReservation = (r: any): Reservation => r && ({
     id: r.id,
@@ -76,23 +77,21 @@ const fromReservation = (r: any): Reservation => r && ({
     vehicle: r.vehicle ? fromVehicle(r.vehicle) : undefined,
 });
 
-const toReservation = (r: Partial<Reservation>) => ({
-    ...r,
-    customer_id: r.customerId,
-    vehicle_id: r.vehicleId,
-    start_date: r.startDate,
-    end_date: r.endDate,
-    start_mileage: r.startMileage,
-    end_mileage: r.endMileage,
-    portal_token: r.portalToken,
-    customerId: undefined,
-    vehicleId: undefined,
-    startDate: undefined,
-    endDate: undefined,
-    startMileage: undefined,
-    endMileage: undefined,
-    portalToken: undefined,
-});
+const toReservation = (r: Partial<Reservation>) => {
+    const { customerId, vehicleId, startDate, endDate, startMileage, endMileage, portalToken, customer, vehicle, ...rest } = r;
+    const payload = {
+        ...rest,
+        customer_id: customerId,
+        vehicle_id: vehicleId,
+        start_date: startDate,
+        end_date: endDate,
+        start_mileage: startMileage,
+        end_mileage: endMileage,
+        portal_token: portalToken,
+    };
+    Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
+    return payload;
+};
 
 const fromContract = (c: any): Contract => c && ({
     id: c.id,
@@ -103,19 +102,19 @@ const fromContract = (c: any): Contract => c && ({
     contractText: c.contract_text,
 });
 
-const toContract = (c: Partial<Contract>) => ({
-    ...c,
-    reservation_id: c.reservationId,
-    customer_id: c.customerId,
-    vehicle_id: c.vehicleId,
-    generated_at: c.generatedAt,
-    contract_text: c.contractText,
-    reservationId: undefined,
-    customerId: undefined,
-    vehicleId: undefined,
-    generatedAt: undefined,
-    contractText: undefined,
-});
+const toContract = (c: Partial<Contract>) => {
+    const { reservationId, customerId, vehicleId, generatedAt, contractText, customer, vehicle, ...rest } = c;
+    const payload = {
+        ...rest,
+        reservation_id: reservationId,
+        customer_id: customerId,
+        vehicle_id: vehicleId,
+        generated_at: generatedAt,
+        contract_text: contractText,
+    };
+    Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
+    return payload;
+};
 
 const fromFinancial = (f: any): FinancialTransaction => f && ({
     id: f.id,
@@ -126,11 +125,12 @@ const fromFinancial = (f: any): FinancialTransaction => f && ({
     reservationId: f.reservation_id,
 });
 
-const toFinancial = (f: Partial<FinancialTransaction>) => ({
-    ...f,
-    reservation_id: f.reservationId,
-    reservationId: undefined,
-});
+const toFinancial = (f: Partial<FinancialTransaction>) => {
+    const { reservationId, reservation, ...rest } = f;
+    const payload = { ...rest, reservation_id: reservationId };
+    Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
+    return payload;
+};
 
 const fromService = (s: any): VehicleService => s && ({
     id: s.id,
@@ -142,13 +142,12 @@ const fromService = (s: any): VehicleService => s && ({
     status: s.status,
 });
 
-const toService = (s: Partial<VehicleService>) => ({
-    ...s,
-    vehicle_id: s.vehicleId,
-    service_date: s.serviceDate,
-    vehicleId: undefined,
-    serviceDate: undefined,
-});
+const toService = (s: Partial<VehicleService>) => {
+    const { vehicleId, serviceDate, vehicle, ...rest } = s;
+    const payload = { ...rest, vehicle_id: vehicleId, service_date: serviceDate };
+    Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
+    return payload;
+};
 
 const fromDamage = (d: any): VehicleDamage => d && ({
     id: d.id,
@@ -162,17 +161,18 @@ const fromDamage = (d: any): VehicleDamage => d && ({
     reservation: d.reservation ? fromReservation(d.reservation) : undefined,
 });
 
-const toDamage = (d: Partial<VehicleDamage>) => ({
-    ...d,
-    vehicle_id: d.vehicleId,
-    reservation_id: d.reservationId,
-    image_url: d.imageUrl,
-    reported_at: d.reportedAt,
-    vehicleId: undefined,
-    reservationId: undefined,
-    imageUrl: undefined,
-    reportedAt: undefined,
-});
+const toDamage = (d: Partial<VehicleDamage>) => {
+    const { vehicleId, reservationId, imageUrl, reportedAt, reservation, ...rest } = d;
+    const payload = {
+        ...rest,
+        vehicle_id: vehicleId,
+        reservation_id: reservationId,
+        image_url: imageUrl,
+        reported_at: reportedAt,
+    };
+    Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
+    return payload;
+};
 
 // Utility to handle Supabase errors
 const handleSupabaseError = ({ error, data }: { error: any, data: any }, entityName: string) => {
