@@ -2,7 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './services/supabaseClient'; // Ensure Supabase is initialized
-import './contexts/DataContext.tsx'; // Ensure the context file is part of the bundle
+// FIX: Removed .tsx from import path for DataContext.
+import './contexts/DataContext'; // Ensure the context file is part of the bundle
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
