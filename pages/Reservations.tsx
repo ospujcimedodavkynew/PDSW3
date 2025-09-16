@@ -1,12 +1,11 @@
 import React, { useState, useMemo, FormEvent, useEffect } from 'react';
-// FIX: Imported the `Contract` type to resolve a type error.
 import type { Reservation, Customer, Vehicle, Contract } from '../types';
 import { useData } from '../contexts/DataContext';
 import { Plus, Search, X, Edit, Trash2 } from 'lucide-react';
 import SignatureModal from '../components/SignatureModal';
 
 // --- Helper to generate contract text ---
-const generateContractText = (reservation: Reservation, customer: Customer, vehicle: Vehicle) => {
+const generateContractText = (reservation: Reservation, customer: Customer, vehicle: Vehicle, totalPrice: number) => {
     const startDate = new Date(reservation.startDate).toLocaleString('cs-CZ');
     const endDate = new Date(reservation.endDate).toLocaleString('cs-CZ');
 
@@ -47,7 +46,7 @@ Smluvní strany se dohodly na uzavření této smlouvy o nájmu dopravního pros
 
 Článek III. - Cena nájmu a platební podmínky
 
-1. Smluvní strany se dohodly na ceně nájmu specifikované v této smlouvě. Cena je splatná nejpozději při převzetí vozidla, pokud není dohodnuto jinak.
+1. Smluvní strany se dohodly na celkové ceně nájmu ve výši ${totalPrice.toLocaleString('cs-CZ')} Kč. Cena je splatná nejpozději při převzetí vozidla, pokud není dohodnuto jinak.
 2. Při převzetí vozidla skládá Nájemce vratnou kauci ve výši 5.000 Kč (slovy: pět tisíc korun českých) v hotovosti nebo na bankovní účet Pronajímatele. Tato kauce slouží k úhradě případných škod, smluvních pokut či jiných pohledávek Pronajímatele za Nájemcem. Kauce bude vrácena Nájemci po řádném vrácení nepoškozeného vozidla, a to v plné výši, pokud nebudou shledány důvody k jejímu částečnému nebo úplnému započtení.
 3. V ceně nájmu je zahrnut denní limit 300 km. Za každý další ujetý kilometr nad tento limit bude účtován poplatek ve výši 3 Kč/km.
 4. V případě vrácení vozidla s neúplně dotankovanou nádrží (palivo musí být dotankováno do plna) je Pronajímatel oprávněn účtovat Nájemci smluvní pokutu ve výši 500 Kč plus náklady na dotankování paliva.
@@ -85,17 +84,10 @@ Nájemce: ${customer.firstName} ${customer.lastName}
 `;
 };
 
-
-// --- Reservation Form Modal ---
-interface ReservationFormModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    customers: Customer[];
-    vehicles: Vehicle[];
-}
-
-const ReservationFormModal: React.FC<ReservationFormModalProps> = ({ isOpen, onClose, customers, vehicles }) => {
-    const { actions } = useData();
+// --- Main Reservations Page Component ---
+const ReservationsPage: React.FC = () => {
+    const { data, actions } = useData();
+    const { customers, vehicles, reservations } = data;
 
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
@@ -108,35 +100,66 @@ const ReservationFormModal: React.FC<ReservationFormModalProps> = ({ isOpen, onC
     const [error, setError] = useState<string | null>(null);
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
     
-    // Derived state for available vehicles based on dates
-    const availableVehicles = useMemo(() => {
-        if (!startDate || !endDate) return vehicles.filter(v => v.status === 'available');
-        
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        if (end <= start) return [];
-
-        const reservations = actions.refreshData ? [] : []; // This part is tricky without direct access to reservations
-
-        // Simplified logic: show available vehicles. A full implementation would check reservation conflicts.
-        return vehicles.filter(v => v.status === 'available');
-
-    }, [startDate, endDate, vehicles]);
-    
     useEffect(() => {
-        // This effect will run when a new reservation is created from the calendar
         const prefillData = sessionStorage.getItem('prefillReservation');
         if (prefillData) {
             try {
                 const { vehicleId, date } = JSON.parse(prefillData);
-                setSelectedVehicleId(vehicleId);
-                setStartDate(date);
+                if (vehicleId) setSelectedVehicleId(vehicleId);
+                if (date) {
+                    const d = new Date(date);
+                     const formattedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                    setStartDate(formattedDate);
+                }
             } catch (e) {
                 console.error("Failed to parse prefill data", e);
             }
             sessionStorage.removeItem('prefillReservation');
         }
-    }, [isOpen]);
+    }, []);
+
+    const availableVehicles = useMemo(() => {
+        if (!startDate || !endDate) return [];
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) return [];
+
+        const conflictingReservationVehicles = new Set(
+            reservations
+                .filter(r => r.status !== 'cancelled')
+                .filter(r => {
+                    const resStart = new Date(r.startDate);
+                    const resEnd = new Date(r.endDate);
+                    return (start < resEnd && end > resStart);
+                })
+                .map(r => r.vehicleId)
+        );
+
+        return vehicles.filter(v => !conflictingReservationVehicles.has(v.id));
+    }, [startDate, endDate, reservations, vehicles]);
+    
+     useEffect(() => {
+        if (selectedVehicleId && !availableVehicles.some(v => v.id === selectedVehicleId)) {
+            setSelectedVehicleId('');
+        }
+    }, [availableVehicles, selectedVehicleId]);
+
+    const calculatedPrice = useMemo(() => {
+        if (!startDate || !endDate || !selectedVehicleId) return null;
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const vehicle = vehicles.find(v => v.id === selectedVehicleId);
+
+        if (!vehicle || end <= start) return null;
+
+        const durationHours = (end.getTime() - start.getTime()) / (1000 * 3600);
+
+        if (durationHours <= 4) return vehicle.rate4h;
+        if (durationHours <= 12) return vehicle.rate12h;
+        
+        const durationDays = Math.ceil(durationHours / 24);
+        return durationDays * vehicle.dailyRate;
+    }, [startDate, endDate, selectedVehicleId, vehicles]);
 
     const resetForm = () => {
         setStartDate('');
@@ -153,8 +176,8 @@ const ReservationFormModal: React.FC<ReservationFormModalProps> = ({ isOpen, onC
         setIsSaving(true);
         setError(null);
 
-        if (!selectedCustomerId || !selectedVehicleId || !startDate || !endDate) {
-            setError("Vyplňte prosím všechna povinná pole: zákazník, vozidlo a termín.");
+        if (!selectedCustomerId || !selectedVehicleId || !startDate || !endDate || !calculatedPrice) {
+            setError("Vyplňte prosím všechna povinná pole: zákazník, vozidlo a platný termín.");
             setIsSaving(false);
             return;
         }
@@ -169,7 +192,6 @@ const ReservationFormModal: React.FC<ReservationFormModalProps> = ({ isOpen, onC
                  return;
             }
 
-            // 1. Create the reservation
             const reservationPayload: Omit<Reservation, 'id' | 'status'> = {
                 customerId: selectedCustomerId,
                 vehicleId: selectedVehicleId,
@@ -178,9 +200,8 @@ const ReservationFormModal: React.FC<ReservationFormModalProps> = ({ isOpen, onC
                 notes: notes,
             };
             const newReservation = await actions.addReservation(reservationPayload);
-
-            // 2. Generate and save the contract
-            const contractText = generateContractText(newReservation, customer, vehicle);
+            
+            const contractText = generateContractText(newReservation, customer, vehicle, calculatedPrice);
             const contractPayload: Omit<Contract, 'id'> = {
                 reservationId: newReservation.id,
                 customerId: selectedCustomerId,
@@ -191,11 +212,12 @@ const ReservationFormModal: React.FC<ReservationFormModalProps> = ({ isOpen, onC
 
             await actions.addContract(contractPayload);
             
+            alert('Rezervace a smlouva byly úspěšně vytvořeny!');
             resetForm();
-            onClose();
         } catch (err) {
             console.error("Failed to save reservation:", err);
-            setError(err instanceof Error ? err.message : 'Uložení rezervace se nezdařilo');
+            const message = err instanceof Error ? err.message : 'Uložení rezervace se nezdařilo.';
+            setError(`Chyba při vytváření rezervace: ${message}`);
         } finally {
             setIsSaving(false);
         }
@@ -215,14 +237,11 @@ const ReservationFormModal: React.FC<ReservationFormModalProps> = ({ isOpen, onC
             end = new Date(start.getTime() + duration * 24 * 60 * 60 * 1000);
         }
         
-        // Format to YYYY-MM-DDTHH:mm
         const pad = (num: number) => num.toString().padStart(2, '0');
         const formattedEnd = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(end.getHours())}:${pad(end.getMinutes())}`;
         
         setEndDate(formattedEnd);
     };
-
-    if (!isOpen) return null;
     
     return (
         <>
@@ -234,148 +253,105 @@ const ReservationFormModal: React.FC<ReservationFormModalProps> = ({ isOpen, onC
                     setIsSignatureModalOpen(false);
                 }}
             />
-             <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start z-50 py-10 overflow-y-auto">
-                <div className="bg-white rounded-lg shadow-2xl p-8 w-full max-w-4xl">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-2xl font-bold">Nová rezervace</h2>
-                        <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-200"><X /></button>
-                    </div>
-                    
-                    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-                        {/* --- Left Column: Form Inputs --- */}
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium">1. Zákazník</label>
-                                <select value={selectedCustomerId} onChange={e => setSelectedCustomerId(e.target.value)} className="w-full p-2 border rounded bg-white" required>
-                                     <option value="">-- Vyberte zákazníka --</option>
-                                     {customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
+             <div className="space-y-6">
+                 <h1 className="text-3xl font-bold text-gray-800">Nová rezervace</h1>
+                 <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-8 bg-white rounded-lg shadow-md">
+                    {/* --- Left Column: Form Inputs --- */}
+                    <div className="lg:col-span-2 space-y-6">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">1. Zákazník</label>
+                            <select value={selectedCustomerId} onChange={e => setSelectedCustomerId(e.target.value)} className="w-full p-2 border rounded-md bg-white" required>
+                                 <option value="">-- Vyberte zákazníka ze seznamu --</option>
+                                 {customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName} ({c.email})</option>)}
+                            </select>
+                        </div>
+                         <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">2. Termín</label>
+                             <div className="grid grid-cols-2 gap-4">
+                                 <input type="datetime-local" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-2 border rounded-md" required />
+                                 <input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-2 border rounded-md" required />
+                            </div>
+                             <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className="text-xs text-gray-700 mr-2">Rychlá volba délky:</span>
+                                <button type="button" onClick={() => handleSetDuration(4, 'hours')} className="px-2 py-1 text-xs bg-gray-200 rounded-full hover:bg-gray-300">4 hod</button>
+                                <button type="button" onClick={() => handleSetDuration(12, 'hours')} className="px-2 py-1 text-xs bg-gray-200 rounded-full hover:bg-gray-300">12 hod</button>
+                                <button type="button" onClick={() => handleSetDuration(1, 'days')} className="px-2 py-1 text-xs bg-gray-200 rounded-full hover:bg-gray-300">1 den</button>
+                                <select onChange={(e) => { if(e.target.value) handleSetDuration(Number(e.target.value), 'days'); }} className="bg-gray-200 rounded-full text-xs px-2 py-1 hover:bg-gray-300 appearance-none cursor-pointer">
+                                    <option value="">dny...</option>
+                                    {Array.from({ length: 29 }, (_, i) => i + 2).map(day => (
+                                        <option key={day} value={day}>{day} dnů</option>
+                                    ))}
                                 </select>
                             </div>
-                             <div>
-                                <label className="block text-sm font-medium">2. Termín</label>
-                                 <div className="grid grid-cols-2 gap-4">
-                                     <input type="datetime-local" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-2 border rounded" required />
-                                     <input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-2 border rounded" required />
-                                </div>
-                                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                                    <span className="text-xs text-gray-700 mr-2">Rychlá volba:</span>
-                                    <button type="button" onClick={() => handleSetDuration(4, 'hours')} className="px-2 py-1 text-xs bg-gray-200 rounded-full hover:bg-gray-300">4 hod</button>
-                                    <button type="button" onClick={() => handleSetDuration(12, 'hours')} className="px-2 py-1 text-xs bg-gray-200 rounded-full hover:bg-gray-300">12 hod</button>
-                                    <button type="button" onClick={() => handleSetDuration(1, 'days')} className="px-2 py-1 text-xs bg-gray-200 rounded-full hover:bg-gray-300">1 den</button>
-                                    <select onChange={(e) => { if(e.target.value) handleSetDuration(Number(e.target.value), 'days'); }} className="bg-gray-200 rounded-full text-xs px-2 py-1 hover:bg-gray-300 appearance-none cursor-pointer">
-                                        <option value="">dny...</option>
-                                        {Array.from({ length: 29 }, (_, i) => i + 2).map(day => (
-                                            <option key={day} value={day}>{day}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-                             <div>
-                                <label className="block text-sm font-medium">3. Vozidlo</label>
-                                <select value={selectedVehicleId} onChange={e => setSelectedVehicleId(e.target.value)} className="w-full p-2 border rounded bg-white" required>
-                                     <option value="">-- Vyberte vozidlo --</option>
-                                     {availableVehicles.map(v => <option key={v.id} value={v.id}>{v.name} ({v.licensePlate})</option>)}
-                                </select>
-                            </div>
-                             <div>
-                                <label className="block text-sm font-medium">4. Poznámky</label>
-                                <textarea value={notes || ''} onChange={e => setNotes(e.target.value)} className="w-full p-2 border rounded h-20" />
-                            </div>
-                             <div>
-                                <label className="block text-sm font-medium">5. Podpis</label>
-                                {signatureDataUrl ? (
-                                    <div className="border rounded-md p-2 bg-gray-50 flex items-center justify-between">
-                                        <img src={signatureDataUrl} alt="Podpis" className="h-12 w-auto bg-white" />
-                                        <button type="button" onClick={() => setIsSignatureModalOpen(true)} className="text-sm text-blue-600 hover:underline">Změnit podpis</button>
-                                    </div>
-                                ) : (
-                                    <button type="button" onClick={() => setIsSignatureModalOpen(true)} className="w-full p-4 border-2 border-dashed rounded-md text-gray-500 hover:border-primary hover:text-primary">
-                                        Otevřít pro podpis zákazníka
-                                    </button>
-                                )}
-                            </div>
                         </div>
-
-                        {/* --- Right Column: Summary --- */}
-                        <div className="bg-gray-50 p-6 rounded-lg space-y-4">
-                             <h3 className="text-xl font-bold border-b pb-2">Sumarizace rezervace</h3>
-                             <div>
-                                <p className="font-semibold">Zákazník:</p>
-                                <p className="text-gray-700">{customers.find(c => c.id === selectedCustomerId)?.firstName} {customers.find(c => c.id === selectedCustomerId)?.lastName || 'Nevybrán'}</p>
-                            </div>
-                            <div>
-                                <p className="font-semibold">Vozidlo:</p>
-                                <p className="text-gray-700">{vehicles.find(v => v.id === selectedVehicleId)?.name || 'Nevybráno'}</p>
-                            </div>
-                             <div>
-                                <p className="font-semibold">Termín:</p>
-                                <p className="text-gray-700">
-                                    {startDate ? new Date(startDate).toLocaleString('cs-CZ') : 'Nezadáno'} - {endDate ? new Date(endDate).toLocaleString('cs-CZ') : 'Nezadáno'}
-                                </p>
-                            </div>
-                             <div className="pt-4 border-t">
-                                <p className="text-xl font-bold">Celková cena: <span className="text-primary">Výpočet...</span></p>
-                            </div>
+                         <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">3. Vozidlo</label>
+                            <select value={selectedVehicleId} onChange={e => setSelectedVehicleId(e.target.value)} className="w-full p-2 border rounded-md bg-white" required disabled={!startDate || !endDate}>
+                                 <option value="">-- Vyberte dostupné vozidlo --</option>
+                                 {availableVehicles.map(v => <option key={v.id} value={v.id}>{v.name} ({v.licensePlate})</option>)}
+                            </select>
+                            {startDate && endDate && availableVehicles.length === 0 && <p className="text-sm text-red-600 mt-1">V zadaném termínu není žádné vozidlo k dispozici.</p>}
                         </div>
-
-                        {/* --- Form Actions --- */}
-                        <div className="md:col-span-2">
-                             {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
-                            <div className="flex justify-end space-x-3 pt-4 border-t">
-                                <button type="button" onClick={onClose} className="py-2 px-4 rounded-lg bg-gray-200 hover:bg-gray-300">Zrušit</button>
-                                <button type="submit" disabled={isSaving} className="py-2 px-6 rounded-lg bg-primary text-white font-bold hover:bg-primary-hover disabled:bg-gray-400">
-                                    {isSaving ? 'Ukládám...' : 'Vytvořit rezervaci a smlouvu'}
+                         <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">4. Poznámky (interní)</label>
+                            <textarea value={notes || ''} onChange={e => setNotes(e.target.value)} className="w-full p-2 border rounded-md h-20" />
+                        </div>
+                         <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">5. Podpis zákazníka</label>
+                            {signatureDataUrl ? (
+                                <div className="border rounded-md p-2 bg-gray-50 flex items-center justify-between">
+                                    <img src={signatureDataUrl} alt="Podpis" className="h-12 w-auto bg-white border" />
+                                    <button type="button" onClick={() => setIsSignatureModalOpen(true)} className="text-sm text-blue-600 hover:underline">Změnit podpis</button>
+                                </div>
+                            ) : (
+                                <button type="button" onClick={() => setIsSignatureModalOpen(true)} className="w-full p-4 border-2 border-dashed rounded-md text-gray-500 hover:border-primary hover:text-primary transition-colors">
+                                    Otevřít pro podpis
                                 </button>
-                            </div>
+                            )}
                         </div>
-                    </form>
-                </div>
-            </div>
+                    </div>
+
+                    {/* --- Right Column: Summary --- */}
+                    <div className="lg:col-span-1 bg-gray-50 p-6 rounded-lg space-y-4 self-start">
+                         <h3 className="text-xl font-bold border-b pb-2 mb-4">Sumarizace</h3>
+                         <div>
+                            <p className="font-semibold">Zákazník:</p>
+                            <p className="text-gray-700">{customers.find(c => c.id === selectedCustomerId)?.firstName} {customers.find(c => c.id === selectedCustomerId)?.lastName || <span className="italic text-gray-500">Nevybrán</span>}</p>
+                        </div>
+                        <div>
+                            <p className="font-semibold">Vozidlo:</p>
+                            <p className="text-gray-700">{vehicles.find(v => v.id === selectedVehicleId)?.name || <span className="italic text-gray-500">Nevybráno</span>}</p>
+                        </div>
+                         <div>
+                            <p className="font-semibold">Termín:</p>
+                            <p className="text-gray-700">
+                                {startDate ? new Date(startDate).toLocaleString('cs-CZ') : '...'}
+                            </p>
+                             <p className="text-gray-700">
+                                do {endDate ? new Date(endDate).toLocaleString('cs-CZ') : '...'}
+                            </p>
+                        </div>
+                         <div className="pt-4 border-t">
+                            <p className="text-sm text-gray-600">Celková cena:</p>
+                            <p className="text-3xl font-bold text-primary">
+                                {calculatedPrice !== null ? `${calculatedPrice.toLocaleString('cs-CZ')} Kč` : <span className="text-xl text-gray-500">Vyplňte údaje</span>}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* --- Form Actions --- */}
+                    <div className="lg:col-span-3">
+                         {error && <p className="text-red-600 bg-red-100 p-3 rounded-md mb-4 text-center">{error}</p>}
+                        <div className="flex justify-end space-x-3 pt-4 border-t">
+                            <button type="button" onClick={resetForm} className="py-2 px-4 rounded-lg bg-gray-200 hover:bg-gray-300">Vyčistit formulář</button>
+                            <button type="submit" disabled={isSaving || !calculatedPrice} className="py-2 px-6 rounded-lg bg-primary text-white font-bold hover:bg-primary-hover disabled:bg-gray-400">
+                                {isSaving ? 'Ukládám...' : 'Vytvořit rezervaci a smlouvu'}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+             </div>
         </>
-    );
-};
-
-
-// --- Main Reservations Page Component ---
-const ReservationsPage: React.FC = () => {
-    const { data, loading } = useData();
-    const { reservations, customers, vehicles } = data;
-    
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    
-    // Logic to open modal if prefill data is present
-    useEffect(() => {
-        if (sessionStorage.getItem('prefillReservation')) {
-            setIsModalOpen(true);
-        }
-    }, []);
-
-
-    if (loading && reservations.length === 0) return <div>Načítání rezervací...</div>;
-
-
-    return (
-        <div>
-            <ReservationFormModal 
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                customers={customers}
-                vehicles={vehicles}
-            />
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-gray-800">Vytvořit rezervaci</h1>
-                 <button onClick={() => setIsModalOpen(true)} className="bg-secondary text-dark-text font-bold py-2 px-4 rounded-lg hover:bg-secondary-hover transition-colors flex items-center">
-                    <Plus className="w-5 h-5 mr-2" />
-                    Přidat rezervaci manuálně
-                </button>
-            </div>
-            
-            <div className="bg-white p-6 rounded-lg shadow-md">
-                <p className="text-gray-700">Pro vytvoření nové rezervace použijte prosím tlačítko vpravo nahoře nebo vytvořte rezervaci kliknutím do volného místa v kalendáři.</p>
-                <p className="mt-2 text-sm text-gray-500">Seznam všech existujících rezervací naleznete v kalendáři nebo na hlavní stránce "Přehled".</p>
-            </div>
-
-        </div>
     );
 };
 
