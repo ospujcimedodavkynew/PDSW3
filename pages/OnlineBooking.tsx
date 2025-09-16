@@ -30,12 +30,9 @@ const OnlineBooking: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
 
     const fetchAvailableVehicles = useCallback(async (start: string, end: string) => {
-        if (!start || !end) return;
-        
-        const startTime = new Date(start);
-        const endTime = new Date(end);
-
-        if (isNaN(startTime.getTime()) || isNaN(endTime.getTime()) || endTime <= startTime) {
+        // No more client-side new Date() parsing. We pass strings directly.
+        // String comparison works for the YYYY-MM-DDTHH:MM format.
+        if (!start || !end || end <= start) {
             setAvailableVehicles([]);
             return;
         }
@@ -43,8 +40,8 @@ const OnlineBooking: React.FC = () => {
         setVehiclesLoading(true);
         setError(null);
         try {
-            // Send full ISO string to backend for reliable parsing
-            const vehicles = await getAvailableVehicles(startTime.toISOString(), endTime.toISOString());
+            // Pass the raw strings from the input directly to the API
+            const vehicles = await getAvailableVehicles(start, end);
             setAvailableVehicles(vehicles);
         } catch (err) {
             console.error(err);
@@ -180,7 +177,7 @@ const OnlineBooking: React.FC = () => {
                                     <span className="ml-4 text-lg text-gray-700">Hledám dostupná vozidla...</span>
                                 </div>
                             )}
-                             {!vehiclesLoading && startDate && endDate && new Date(endDate) > new Date(startDate) && (
+                             {!vehiclesLoading && startDate && endDate && endDate > startDate && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                                     {availableVehicles.map(vehicle => (
                                         <div key={vehicle.id} className="bg-white rounded-xl shadow-lg overflow-hidden flex flex-col transition-transform hover:scale-105">
