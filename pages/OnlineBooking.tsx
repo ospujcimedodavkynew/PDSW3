@@ -19,11 +19,24 @@ const OnlineBooking: React.FC = () => {
     const [error, setError] = useState<string>('');
     const [isSubmitted, setIsSubmitted] = useState(false);
 
+    // Robust local datetime parsing to fix mobile browser inconsistencies.
+    const parseLocalDateTime = (dtStr: string): Date | null => {
+        if (!dtStr) return null;
+        // The input format is "YYYY-MM-DDTHH:mm"
+        const parts = dtStr.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+        if (!parts) return null;
+        const [, year, month, day, hours, minutes] = parts.map(Number);
+        // new Date(year, monthIndex, day, hours, minutes) constructs a date in the local timezone.
+        return new Date(year, month - 1, day, hours, minutes);
+    };
+
     const availableVehicles = useMemo(() => {
         if (!startDate || !endDate) return [];
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        if (end <= start) return [];
+        
+        const start = parseLocalDateTime(startDate);
+        const end = parseLocalDateTime(endDate);
+        
+        if (!start || !end || end <= start) return [];
 
         const conflictingVehicleIds = new Set<string>();
         for (const r of reservations) {
@@ -42,9 +55,9 @@ const OnlineBooking: React.FC = () => {
 
     const totalPrice = useMemo(() => {
         if (!selectedVehicle || !startDate || !endDate) return 0;
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        if (end <= start) return 0;
+        const start = parseLocalDateTime(startDate);
+        const end = parseLocalDateTime(endDate);
+        if (!start || !end || end <= start) return 0;
 
         const durationHours = (end.getTime() - start.getTime()) / (1000 * 3600);
         
@@ -59,7 +72,9 @@ const OnlineBooking: React.FC = () => {
             alert("Nejprve prosím vyberte počáteční datum a čas.");
             return;
         }
-        const start = new Date(startDate);
+        const start = parseLocalDateTime(startDate);
+        if (!start) return; // Should not happen if startDate is valid
+        
         let end: Date;
 
         if (unit === 'hours') {
@@ -92,12 +107,20 @@ const OnlineBooking: React.FC = () => {
             return;
         }
         
+        const start = parseLocalDateTime(startDate);
+        const end = parseLocalDateTime(endDate);
+
+        if (!start || !end) {
+            setError("Neplatný formát data.");
+            return;
+        }
+
         setIsProcessing(true);
         try {
             await actions.createOnlineReservation(
                 selectedVehicleId,
-                new Date(startDate),
-                new Date(endDate),
+                start,
+                end,
                 customerData
             );
             setIsSubmitted(true);
