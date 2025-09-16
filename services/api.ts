@@ -1,7 +1,8 @@
 import { supabase } from './supabaseClient';
 import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage } from '../types';
 import { Session } from '@supabase/supabase-js';
-import { v4 as uuidv4 } from 'uuid';
+// FIX: Changed import to full URL to resolve build error on platforms like Vercel.
+import { v4 as uuidv4 } from 'https://cdn.jsdelivr.net/npm/uuid@9.0.1/+esm';
 
 
 // --- Auth ---
