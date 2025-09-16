@@ -4,26 +4,38 @@ import { Customer, Vehicle } from '../types';
 import { CheckCircle, Loader } from 'lucide-react';
 
 /**
- * Robustně parsuje string z datetime-local inputu.
- * Zabraňuje nespolehlivému chování `new Date(string)` napříč prohlížeči.
- * @param dateTimeString - String ve formátu YYYY-MM-DDTHH:mm nebo YYYY-MM-DD HH:mm
+ * DEFINITIVNÍ OPRAVA: Tento nový parser je maximálně robustní.
+ * Rozebere textový řetězec na části a je odolný vůči různým formátům,
+ * které posílají mobilní prohlížeče (s 'T' i mezerou, s volitelnými sekundami).
+ * Tímto způsobem se vyhýbáme nespolehlivé funkci `new Date(string)`.
+ * @param dateTimeString - String ve formátu YYYY-MM-DDTHH:mm, YYYY-MM-DD HH:mm, nebo YYYY-MM-DDTHH:mm:ss
  * @returns Platný Date objekt nebo null, pokud je formát neplatný.
  */
 const parseDateTimeLocal = (dateTimeString: string): Date | null => {
     if (!dateTimeString) return null;
-    // PŮVODNÍ CHYBA: Regex očekával POUZE "T" jako oddělovač.
-    // FINÁLNÍ OPRAVA: Regex nyní akceptuje "T" NEBO mezeru ([T\s]), což pokrývá chování mobilních prohlížečů a definitivně řeší problém.
-    const match = dateTimeString.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})$/);
-    if (!match) return null;
-    
-    const [, year, month, day, hours, minutes] = match.map(Number);
-    
-    // Měsíc je v JS Date konstruktoru 0-indexovaný (0-11)
-    const date = new Date(year, month - 1, day, hours, minutes, 0, 0);
 
-    // Ověření, že vytvořené datum je validní a konstruktor ho "nepřetočil"
-    // např. new Date(2024, 1, 30) -> 1. března
-    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    // Regex pro zachycení roku, měsíce, dne, hodin, minut a VOLITELNÝCH sekund.
+    // Akceptuje 'T' i mezeru jako oddělovač.
+    const match = dateTimeString.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
+    
+    if (!match) {
+        // Pokud formát naprosto neodpovídá, vrátíme null.
+        return null;
+    }
+    
+    const year = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10); // Formát je 1-12
+    const day = parseInt(match[3], 10);
+    const hours = parseInt(match[4], 10);
+    const minutes = parseInt(match[5], 10);
+    const seconds = match[6] ? parseInt(match[6], 10) : 0; // Sekundy jsou volitelné, výchozí je 0.
+    
+    // Měsíc v JS Date konstruktoru je 0-indexovaný (0-11), proto month - 1.
+    const date = new Date(year, month - 1, day, hours, minutes, seconds);
+
+    // Finální kontrola, zda vytvořené datum je platné a nebylo "přetočeno"
+    // kvůli neplatným hodnotám (např. měsíc 13).
+    if (isNaN(date.getTime()) || date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
         return null;
     }
 
