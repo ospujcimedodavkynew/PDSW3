@@ -70,6 +70,8 @@ const Reservations: React.FC = () => {
         const pad = (num: number) => num.toString().padStart(2, '0');
         const formattedEnd = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(end.getHours())}:${pad(end.getMinutes())}`;
         setEndDate(formattedEnd);
+        // FIX: Reset vehicle selection as availability may have changed, preventing crash
+        setSelectedVehicleId('');
     };
 
     const handleSaveSignature = (dataUrl: string) => {
