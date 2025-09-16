@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { Reservation, Vehicle, Customer } from '../types';
 import { UserPlus, Car, Calendar as CalendarIcon, Signature, Edit } from 'lucide-react';
 import SignatureModal from '../components/SignatureModal';
@@ -43,6 +43,17 @@ const Reservations: React.FC = () => {
         return vehicles.filter(v => v.status !== 'maintenance' && !conflictingVehicleIds.has(v.id));
     }, [vehicles, reservations, startDate, endDate]);
 
+    // ROBUST FIX: This effect ensures that if the selected vehicle is no longer
+    // in the list of available vehicles (due to a date change), it gets deselected automatically.
+    useEffect(() => {
+        if (selectedVehicleId) {
+            const isSelectedStillAvailable = availableVehicles.some(v => v.id === selectedVehicleId);
+            if (!isSelectedStillAvailable) {
+                setSelectedVehicleId('');
+            }
+        }
+    }, [availableVehicles, selectedVehicleId]);
+
 
     const totalPrice = useMemo(() => {
         if (!selectedVehicle || !startDate || !endDate) return 0;
@@ -70,8 +81,6 @@ const Reservations: React.FC = () => {
         const pad = (num: number) => num.toString().padStart(2, '0');
         const formattedEnd = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(end.getHours())}:${pad(end.getMinutes())}`;
         setEndDate(formattedEnd);
-        // FIX: Reset vehicle selection as availability may have changed, preventing crash
-        setSelectedVehicleId('');
     };
 
     const handleSaveSignature = (dataUrl: string) => {
@@ -267,11 +276,11 @@ Digitální podpis nájemce:
                         <div className="grid grid-cols-2 gap-4 mb-3">
                             <div>
                                 <label className="block text-sm font-medium">Od (datum a čas)</label>
-                                <input type="datetime-local" value={startDate} onChange={e => { setSelectedVehicleId(''); setStartDate(e.target.value); }} className="w-full p-2 border rounded" required />
+                                <input type="datetime-local" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-2 border rounded" required />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium">Do (datum a čas)</label>
-                                <input type="datetime-local" value={endDate} onChange={e => { setSelectedVehicleId(''); setEndDate(e.target.value); }} className="w-full p-2 border rounded" required />
+                                <input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-2 border rounded" required />
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
