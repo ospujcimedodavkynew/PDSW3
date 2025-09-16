@@ -1,7 +1,33 @@
-import React, { useState, useMemo, FormEvent } from 'react';
+import React, { useState, useMemo, FormEvent, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
-import { Customer } from '../types';
+import { Customer, Vehicle } from '../types';
 import { CheckCircle, Loader } from 'lucide-react';
+
+/**
+ * Robustně parsuje string z datetime-local inputu.
+ * Zabraňuje nespolehlivému chování `new Date(string)` napříč prohlížeči.
+ * @param dateTimeString - String ve formátu YYYY-MM-DDTHH:mm
+ * @returns Platný Date objekt nebo null, pokud je formát neplatný.
+ */
+const parseDateTimeLocal = (dateTimeString: string): Date | null => {
+    if (!dateTimeString) return null;
+    const match = dateTimeString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+    if (!match) return null;
+    
+    const [, year, month, day, hours, minutes] = match.map(Number);
+    
+    // Měsíc je v JS Date konstruktoru 0-indexovaný (0-11)
+    const date = new Date(year, month - 1, day, hours, minutes, 0, 0);
+
+    // Ověření, že vytvořené datum je validní a konstruktor ho "nepřetočil"
+    // např. new Date(2024, 1, 30) -> 1. března
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+        return null;
+    }
+
+    return date;
+};
+
 
 const OnlineBooking: React.FC = () => {
     const { data, actions, loading: dataLoading } = useData();
@@ -18,40 +44,57 @@ const OnlineBooking: React.FC = () => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string>('');
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [calculating, setCalculating] = useState(false);
+    const [availableVehicles, setAvailableVehicles] = useState<Vehicle[]>([]);
 
     // --- ROBUST DATE HANDLING & VALIDATION ---
-    const isDateValid = useMemo(() => {
-        if (!startDate || !endDate) return false;
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        // Check if dates are valid and end is after start
-        return !isNaN(start.getTime()) && !isNaN(end.getTime()) && end > start;
-    }, [startDate, endDate]);
-    
-    const availableVehicles = useMemo(() => {
-        if (!isDateValid) return [];
-        const start = new Date(startDate);
-        const end = new Date(endDate);
+    const startDateObj = useMemo(() => parseDateTimeLocal(startDate), [startDate]);
+    const endDateObj = useMemo(() => parseDateTimeLocal(endDate), [endDate]);
 
-        const conflictingVehicleIds = new Set<string>();
-        for (const r of reservations) {
-            if (r.status === 'scheduled' || r.status === 'active') {
-                const resStart = new Date(r.startDate);
-                const resEnd = new Date(r.endDate);
-                if (start < resEnd && end > resStart) {
-                    conflictingVehicleIds.add(r.vehicleId);
+    const dateError = useMemo(() => {
+        if (startDate && !startDateObj) return "Neplatný formát počátečního data. Zkuste jej vybrat znovu.";
+        if (endDate && !endDateObj) return "Neplatný formát konečného data. Zkuste jej vybrat znovu.";
+        if (startDateObj && endDateObj && endDateObj <= startDateObj) return "Datum konce musí být po datu začátku.";
+        return null;
+    }, [startDate, endDate, startDateObj, endDateObj]);
+    
+    const isDateValid = useMemo(() => {
+        return !!(startDateObj && endDateObj && !dateError);
+    }, [startDateObj, endDateObj, dateError]);
+    
+    useEffect(() => {
+        if (isDateValid && startDateObj && endDateObj) {
+            setCalculating(true);
+            const timer = setTimeout(() => {
+                const start = startDateObj;
+                const end = endDateObj;
+                const conflictingVehicleIds = new Set<string>();
+                for (const r of reservations) {
+                    if (r.status === 'scheduled' || r.status === 'active') {
+                        const resStart = new Date(r.startDate);
+                        const resEnd = new Date(r.endDate);
+                        if (start < resEnd && end > resStart) {
+                            conflictingVehicleIds.add(r.vehicleId);
+                        }
+                    }
                 }
-            }
+                const filtered = vehicles.filter(v => v.status !== 'maintenance' && !conflictingVehicleIds.has(v.id));
+                setAvailableVehicles(filtered);
+                setCalculating(false);
+            }, 300); // Krátké zpoždění pro lepší UX (aby se zobrazil loader)
+            return () => clearTimeout(timer);
+        } else {
+            setAvailableVehicles([]);
         }
-        return vehicles.filter(v => v.status !== 'maintenance' && !conflictingVehicleIds.has(v.id));
-    }, [vehicles, reservations, startDate, endDate, isDateValid]);
+    }, [isDateValid, startDateObj, endDateObj, reservations, vehicles]);
+
 
     const selectedVehicle = useMemo(() => vehicles.find(v => v.id === selectedVehicleId), [vehicles, selectedVehicleId]);
 
     const totalPrice = useMemo(() => {
-        if (!selectedVehicle || !isDateValid) return 0;
-        const start = new Date(startDate);
-        const end = new Date(endDate);
+        if (!selectedVehicle || !isDateValid || !startDateObj || !endDateObj) return 0;
+        const start = startDateObj;
+        const end = endDateObj;
 
         const durationHours = (end.getTime() - start.getTime()) / (1000 * 3600);
         
@@ -59,18 +102,18 @@ const OnlineBooking: React.FC = () => {
         if (durationHours <= 12) return selectedVehicle.rate12h;
         const days = Math.ceil(durationHours / 24);
         return days * selectedVehicle.dailyRate;
-    }, [selectedVehicle, startDate, endDate, isDateValid]);
+    }, [selectedVehicle, isDateValid, startDateObj, endDateObj]);
 
     const handleSetDuration = (duration: number, unit: 'hours' | 'days') => {
         if (!startDate) {
             alert("Nejprve prosím vyberte počáteční datum a čas.");
             return;
         }
-        const start = new Date(startDate);
-        if (isNaN(start.getTime())) {
+        if (!startDateObj) {
             alert("Zadané počáteční datum je neplatné. Zkuste ho prosím vybrat znovu.");
             return;
         }
+        const start = startDateObj;
         let end: Date;
 
         if (unit === 'hours') {
@@ -104,10 +147,11 @@ const OnlineBooking: React.FC = () => {
         
         setIsProcessing(true);
         try {
+            if (!startDateObj || !endDateObj) throw new Error("Neplatné datum");
             await actions.createOnlineReservation(
                 selectedVehicleId,
-                new Date(startDate),
-                new Date(endDate),
+                startDateObj,
+                endDateObj,
                 customerData
             );
             setIsSubmitted(true);
@@ -156,6 +200,7 @@ const OnlineBooking: React.FC = () => {
                                         <input type="datetime-local" value={endDate} onChange={e => { setSelectedVehicleId(''); setEndDate(e.target.value); }} className="w-full p-2 border rounded-md" required />
                                     </div>
                                 </div>
+                                {dateError && <p className="text-red-500 text-sm mt-2">{dateError}</p>}
                                 <div className="mt-4 flex flex-wrap items-center gap-2">
                                     <span className="text-sm font-medium text-gray-700 mr-2">Rychlá volba délky:</span>
                                     <button type="button" onClick={() => handleSetDuration(4, 'hours')} className="px-3 py-1 text-sm bg-gray-200 rounded-full hover:bg-gray-300">4 hodiny</button>
@@ -169,6 +214,11 @@ const OnlineBooking: React.FC = () => {
                                 {!isDateValid ? (
                                     <div className="text-center p-6 bg-gray-50 rounded-md border">
                                         <p className="text-gray-600 font-medium">Nejprve prosím zvolte platný termín pronájmu.</p>
+                                    </div>
+                                ) : calculating ? (
+                                    <div className="col-span-full text-center p-6 flex items-center justify-center">
+                                        <Loader className="w-6 h-6 animate-spin mr-3 text-primary" />
+                                        <span className="text-gray-600">Hledám dostupná vozidla...</span>
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -223,10 +273,10 @@ const OnlineBooking: React.FC = () => {
                                     </div>
                                      <div>
                                         <h3 className="font-semibold text-gray-500">Období:</h3>
-                                        {isDateValid ? (
+                                        {isDateValid && startDateObj && endDateObj ? (
                                             <>
-                                                <p className="text-gray-700"><strong>Od:</strong> {new Date(startDate).toLocaleString('cs-CZ')}</p>
-                                                <p className="text-gray-700"><strong>Do:</strong> {new Date(endDate).toLocaleString('cs-CZ')}</p>
+                                                <p className="text-gray-700"><strong>Od:</strong> {startDateObj.toLocaleString('cs-CZ')}</p>
+                                                <p className="text-gray-700"><strong>Do:</strong> {endDateObj.toLocaleString('cs-CZ')}</p>
                                             </>
                                         ) : <p className="text-gray-700 italic">Nezvoleno</p>}
                                     </div>
