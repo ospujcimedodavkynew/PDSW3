@@ -1,4 +1,3 @@
-// FIX: Restored correct type definitions. This file was previously overwritten with component code.
 export enum Page {
     DASHBOARD = 'DASHBOARD',
     RESERVATIONS = 'RESERVATIONS',
@@ -8,6 +7,24 @@ export enum Page {
     CONTRACTS = 'CONTRACTS',
     FINANCIALS = 'FINANCIALS',
     REPORTS = 'REPORTS',
+}
+
+export interface Vehicle {
+    id: string;
+    name: string;
+    make?: string;
+    model?: string;
+    year: number;
+    licensePlate: string;
+    status: 'available' | 'rented' | 'maintenance';
+    imageUrl?: string;
+    rate4h: number;
+    rate12h: number;
+    dailyRate: number;
+    features?: string[];
+    currentMileage: number;
+    description?: string;
+    dimensions?: string;
 }
 
 export interface Customer {
@@ -22,35 +39,18 @@ export interface Customer {
     ico?: string;
 }
 
-export interface Vehicle {
-    id: string;
-    name: string;
-    make: string;
-    model: string;
-    year: number;
-    licensePlate: string;
-    status: 'available' | 'rented' | 'maintenance';
-    imageUrl: string;
-    rate4h: number;
-    rate12h: number;
-    dailyRate: number;
-    features: string[];
-    currentMileage: number;
-    description: string;
-    dimensions: string;
-}
-
 export interface Reservation {
     id: string;
     customerId: string;
     vehicleId: string;
-    startDate: Date;
-    endDate: Date;
-    status: 'scheduled' | 'active' | 'completed' | 'cancelled' | 'pending-customer';
+    startDate: Date | string;
+    endDate: Date | string;
+    status: 'pending-customer' | 'scheduled' | 'active' | 'completed';
     startMileage?: number;
     endMileage?: number;
     notes?: string;
     portalToken?: string;
+    // Expanded properties for easy access in components
     customer?: Customer;
     vehicle?: Vehicle;
 }
@@ -60,8 +60,9 @@ export interface Contract {
     reservationId: string;
     customerId: string;
     vehicleId: string;
-    generatedAt: Date;
+    generatedAt: Date | string;
     contractText: string;
+    // Expanded properties
     customer?: Customer;
     vehicle?: Vehicle;
 }
@@ -70,9 +71,10 @@ export interface FinancialTransaction {
     id: string;
     type: 'income' | 'expense';
     amount: number;
-    date: Date;
+    date: Date | string;
     description: string;
     reservationId?: string;
+    // Expanded properties
     reservation?: Reservation;
 }
 
@@ -80,21 +82,23 @@ export interface VehicleService {
     id: string;
     vehicleId: string;
     description: string;
-    serviceDate: Date;
+    serviceDate: Date | string;
     cost?: number;
     notes?: string;
     status: 'planned' | 'completed';
+    // Expanded property
     vehicle?: Vehicle;
 }
 
 export interface VehicleDamage {
     id: string;
     vehicleId: string;
-    reservationId?: string;
+    reservationId: string;
     description: string;
     location: string;
     imageUrl: string;
-    reportedAt: Date;
+    reportedAt: Date | string;
     status: 'reported' | 'repaired';
+    // Expanded property
     reservation?: Reservation;
 }
