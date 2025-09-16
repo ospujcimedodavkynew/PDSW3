@@ -12,7 +12,7 @@ const OnlineBooking: React.FC = () => {
     const [endDate, setEndDate] = useState('');
     const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
     const [customerData, setCustomerData] = useState<Omit<Customer, 'id'>>({
-        firstName: '', lastName: '', email: '', phone: '', driverLicenseNumber: '', address: ''
+        firstName: '', lastName: '', email: '', phone: '', driverLicenseNumber: '', address: '', ico: ''
     });
 
     const [isProcessing, setIsProcessing] = useState(false);
@@ -53,6 +53,28 @@ const OnlineBooking: React.FC = () => {
         const days = Math.ceil(durationHours / 24);
         return days * selectedVehicle.dailyRate;
     }, [selectedVehicle, startDate, endDate]);
+
+    const handleSetDuration = (duration: number, unit: 'hours' | 'days') => {
+        if (!startDate) {
+            alert("Nejprve prosím vyberte počáteční datum a čas.");
+            return;
+        }
+        const start = new Date(startDate);
+        let end: Date;
+
+        if (unit === 'hours') {
+            end = new Date(start.getTime() + duration * 60 * 60 * 1000);
+        } else { // days
+            end = new Date(start.getTime() + duration * 24 * 60 * 60 * 1000);
+        }
+        
+        // Format to YYYY-MM-DDTHH:mm
+        const pad = (num: number) => num.toString().padStart(2, '0');
+        const formattedEnd = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(end.getHours())}:${pad(end.getMinutes())}`;
+        
+        setEndDate(formattedEnd);
+        setSelectedVehicleId(''); // Reset vehicle selection as availability might change
+    };
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
@@ -123,6 +145,18 @@ const OnlineBooking: React.FC = () => {
                                 <input type="datetime-local" value={endDate} onChange={e => { setSelectedVehicleId(''); setEndDate(e.target.value); }} className="w-full p-2 border rounded-md" required />
                             </div>
                         </div>
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-medium text-gray-700 mr-2">Rychlá volba délky:</span>
+                            <button type="button" onClick={() => handleSetDuration(4, 'hours')} className="px-3 py-1 text-sm bg-gray-200 rounded-full hover:bg-gray-300">4 hodiny</button>
+                            <button type="button" onClick={() => handleSetDuration(12, 'hours')} className="px-3 py-1 text-sm bg-gray-200 rounded-full hover:bg-gray-300">12 hodin</button>
+                            <button type="button" onClick={() => handleSetDuration(1, 'days')} className="px-3 py-1 text-sm bg-gray-200 rounded-full hover:bg-gray-300">1 den</button>
+                            <select onChange={(e) => { if(e.target.value) handleSetDuration(Number(e.target.value), 'days'); }} className="bg-gray-200 rounded-full text-sm px-3 py-1 hover:bg-gray-300 appearance-none cursor-pointer">
+                                <option value="">Další dny...</option>
+                                {Array.from({ length: 29 }, (_, i) => i + 2).map(day => (
+                                    <option key={day} value={day}>{day} dny</option>
+                                ))}
+                            </select>
+                        </div>
                     </section>
 
                     <section>
@@ -157,11 +191,14 @@ const OnlineBooking: React.FC = () => {
                                 <input type="text" placeholder="Jméno" value={customerData.firstName} onChange={e => setCustomerData({...customerData, firstName: e.target.value})} className="w-full p-3 border rounded-md" required />
                                 <input type="text" placeholder="Příjmení" value={customerData.lastName} onChange={e => setCustomerData({...customerData, lastName: e.target.value})} className="w-full p-3 border rounded-md" required />
                             </div>
-                            <input type="email" placeholder="Email" value={customerData.email} onChange={e => setCustomerData({...customerData, email: e.target.value})} className="w-full p-3 border rounded-md mt-4" required />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                <input type="email" placeholder="Email" value={customerData.email} onChange={e => setCustomerData({...customerData, email: e.target.value})} className="w-full p-3 border rounded-md" required />
+                                <input type="tel" placeholder="Telefon" value={customerData.phone} onChange={e => setCustomerData({...customerData, phone: e.target.value})} className="w-full p-3 border rounded-md" required />
+                            </div>
                             <input type="text" placeholder="Adresa (Ulice, ČP, Město, PSČ)" value={customerData.address} onChange={e => setCustomerData({...customerData, address: e.target.value})} className="w-full p-3 border rounded-md mt-4" required />
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                <input type="tel" placeholder="Telefon" value={customerData.phone} onChange={e => setCustomerData({...customerData, phone: e.target.value})} className="w-full p-3 border rounded-md" required />
                                 <input type="text" placeholder="Číslo řidičského průkazu" value={customerData.driverLicenseNumber} onChange={e => setCustomerData({...customerData, driverLicenseNumber: e.target.value})} className="w-full p-3 border rounded-md" required />
+                                <input type="text" placeholder="IČO (volitelné)" value={customerData.ico || ''} onChange={e => setCustomerData({...customerData, ico: e.target.value})} className="w-full p-3 border rounded-md" />
                             </div>
                         </section>
                     )}
