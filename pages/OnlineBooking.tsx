@@ -77,6 +77,13 @@ const OnlineBooking: React.FC = () => {
     }, [startDateObj, endDateObj, dateError]);
     
     useEffect(() => {
+        // Definitivní oprava "race condition": Výpočet se nespustí, dokud kontext neohlásí,
+        // že počáteční načítání dat je kompletně dokončeno.
+        if (dataLoading) {
+            setAvailableVehicles([]); // Jistota, že se nezobrazí stará data
+            return;
+        }
+
         if (isDateValid && startDateObj && endDateObj) {
             setCalculating(true);
             const timer = setTimeout(() => {
@@ -104,7 +111,9 @@ const OnlineBooking: React.FC = () => {
         } else {
             setAvailableVehicles([]);
         }
-    }, [isDateValid, startDateObj, endDateObj, reservations, vehicles, selectedVehicleId]);
+    // Přidání `dataLoading` do závislostí zajistí, že se efekt znovu spustí,
+    // jakmile se data donačtou.
+    }, [isDateValid, startDateObj, endDateObj, reservations, vehicles, selectedVehicleId, dataLoading]);
 
 
     const selectedVehicle = useMemo(() => vehicles.find(v => v.id === selectedVehicleId), [vehicles, selectedVehicleId]);
@@ -180,7 +189,12 @@ const OnlineBooking: React.FC = () => {
     };
     
     if (dataLoading) {
-         return <div className="min-h-screen flex items-center justify-center bg-gray-100"><Loader className="w-8 h-8 animate-spin" /> Načítání...</div>;
+         return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
+                <Loader className="w-10 h-10 animate-spin text-primary" /> 
+                <p className="mt-4 text-lg text-gray-700 font-semibold">Načítám aktuální nabídku vozidel...</p>
+            </div>
+        );
     }
     
     if (isSubmitted) {
