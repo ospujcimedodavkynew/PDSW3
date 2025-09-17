@@ -94,13 +94,17 @@ const OnlineBooking: React.FC = () => {
                 }
                 const filtered = vehicles.filter(v => v.status !== 'maintenance' && !conflictingVehicleIds.has(v.id));
                 setAvailableVehicles(filtered);
+                // If a vehicle was selected but is no longer available, deselect it
+                if (selectedVehicleId && !filtered.some(v => v.id === selectedVehicleId)) {
+                    setSelectedVehicleId('');
+                }
                 setCalculating(false);
             }, 300); // Krátké zpoždění pro lepší UX (aby se zobrazil loader)
             return () => clearTimeout(timer);
         } else {
             setAvailableVehicles([]);
         }
-    }, [isDateValid, startDateObj, endDateObj, reservations, vehicles]);
+    }, [isDateValid, startDateObj, endDateObj, reservations, vehicles, selectedVehicleId]);
 
 
     const selectedVehicle = useMemo(() => vehicles.find(v => v.id === selectedVehicleId), [vehicles, selectedVehicleId]);
@@ -140,7 +144,6 @@ const OnlineBooking: React.FC = () => {
         const formattedEnd = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(end.getHours())}:${pad(end.getMinutes())}`;
         
         setEndDate(formattedEnd);
-        setSelectedVehicleId('');
     };
 
     const handleSubmit = async (e: FormEvent) => {
@@ -207,11 +210,11 @@ const OnlineBooking: React.FC = () => {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium">Od (datum a čas)</label>
-                                        <input type="datetime-local" value={startDate} onChange={e => { setSelectedVehicleId(''); setStartDate(e.target.value); }} className="w-full p-2 border rounded-md" required />
+                                        <input type="datetime-local" value={startDate} onChange={e => { setStartDate(e.target.value); }} className="w-full p-2 border rounded-md" required />
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium">Do (datum a čas)</label>
-                                        <input type="datetime-local" value={endDate} onChange={e => { setSelectedVehicleId(''); setEndDate(e.target.value); }} className="w-full p-2 border rounded-md" required />
+                                        <input type="datetime-local" value={endDate} onChange={e => { setEndDate(e.target.value); }} className="w-full p-2 border rounded-md" required />
                                     </div>
                                 </div>
                                 {dateError && <p className="text-red-500 text-sm mt-2">{dateError}</p>}
