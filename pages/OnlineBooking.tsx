@@ -1,7 +1,8 @@
 import React, { useState, useMemo, FormEvent, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
-import { Customer, Vehicle } from '../types';
+import { Customer, Reservation, Vehicle } from '../types';
 import { CheckCircle, Loader } from 'lucide-react';
+import { getPublicBookingData } from '../services/api';
 
 /**
  * DEFINITIVNÍ OPRAVA: Tento nový parser je maximálně robustní.
@@ -14,27 +15,21 @@ import { CheckCircle, Loader } from 'lucide-react';
 const parseDateTimeLocal = (dateTimeString: string): Date | null => {
     if (!dateTimeString) return null;
 
-    // Regex pro zachycení roku, měsíce, dne, hodin, minut a VOLITELNÝCH sekund.
-    // Akceptuje 'T' i mezeru jako oddělovač.
     const match = dateTimeString.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
     
     if (!match) {
-        // Pokud formát naprosto neodpovídá, vrátíme null.
         return null;
     }
     
     const year = parseInt(match[1], 10);
-    const month = parseInt(match[2], 10); // Formát je 1-12
+    const month = parseInt(match[2], 10);
     const day = parseInt(match[3], 10);
     const hours = parseInt(match[4], 10);
     const minutes = parseInt(match[5], 10);
-    const seconds = match[6] ? parseInt(match[6], 10) : 0; // Sekundy jsou volitelné, výchozí je 0.
+    const seconds = match[6] ? parseInt(match[6], 10) : 0;
     
-    // Měsíc v JS Date konstruktoru je 0-indexovaný (0-11), proto month - 1.
     const date = new Date(year, month - 1, day, hours, minutes, seconds);
 
-    // Finální kontrola, zda vytvořené datum je platné a nebylo "přetočeno"
-    // kvůli neplatným hodnotám (např. měsíc 13).
     if (isNaN(date.getTime()) || date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
         return null;
     }
@@ -44,8 +39,13 @@ const parseDateTimeLocal = (dateTimeString: string): Date | null => {
 
 
 const OnlineBooking: React.FC = () => {
-    const { data, actions, loading: dataLoading } = useData();
-    const { vehicles, reservations } = data;
+    // Používáme context POUZE pro odesílání akcí (vytvoření rezervace)
+    const { actions } = useData();
+
+    // Lokální state pro data, která si tato komponenta načítá sama
+    const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+    const [reservations, setReservations] = useState<Reservation[]>([]);
+    const [pageLoading, setPageLoading] = useState(true);
 
     // Form states
     const [startDate, setStartDate] = useState('');
@@ -61,6 +61,23 @@ const OnlineBooking: React.FC = () => {
     const [calculating, setCalculating] = useState(false);
     const [availableVehicles, setAvailableVehicles] = useState<Vehicle[]>([]);
 
+    // Načtení veřejných dat při prvním zobrazení komponenty
+    useEffect(() => {
+        const fetchPublicData = async () => {
+            setPageLoading(true);
+            try {
+                const publicData = await getPublicBookingData();
+                setVehicles(publicData.vehicles);
+                setReservations(publicData.reservations);
+            } catch (err) {
+                setError("Chyba při načítání nabídky vozidel. Zkuste prosím obnovit stránku.");
+            } finally {
+                setPageLoading(false);
+            }
+        };
+        fetchPublicData();
+    }, []); // Prázdné pole znamená, že se efekt spustí pouze jednou
+
     // --- ROBUST DATE HANDLING & VALIDATION ---
     const startDateObj = useMemo(() => parseDateTimeLocal(startDate), [startDate]);
     const endDateObj = useMemo(() => parseDateTimeLocal(endDate), [endDate]);
@@ -72,15 +89,11 @@ const OnlineBooking: React.FC = () => {
         return null;
     }, [startDate, endDate, startDateObj, endDateObj]);
     
-    const isDateValid = useMemo(() => {
-        return !!(startDateObj && endDateObj && !dateError);
-    }, [startDateObj, endDateObj, dateError]);
+    const isDateValid = useMemo(() => !!(startDateObj && endDateObj && !dateError), [startDateObj, endDateObj, dateError]);
     
     useEffect(() => {
-        // Definitivní oprava "race condition": Výpočet se nespustí, dokud kontext neohlásí,
-        // že počáteční načítání dat je kompletně dokončeno.
-        if (dataLoading) {
-            setAvailableVehicles([]); // Jistota, že se nezobrazí stará data
+        if (pageLoading) {
+            setAvailableVehicles([]);
             return;
         }
 
@@ -101,19 +114,16 @@ const OnlineBooking: React.FC = () => {
                 }
                 const filtered = vehicles.filter(v => v.status !== 'maintenance' && !conflictingVehicleIds.has(v.id));
                 setAvailableVehicles(filtered);
-                // If a vehicle was selected but is no longer available, deselect it
                 if (selectedVehicleId && !filtered.some(v => v.id === selectedVehicleId)) {
                     setSelectedVehicleId('');
                 }
                 setCalculating(false);
-            }, 300); // Krátké zpoždění pro lepší UX (aby se zobrazil loader)
+            }, 300);
             return () => clearTimeout(timer);
         } else {
             setAvailableVehicles([]);
         }
-    // Přidání `dataLoading` do závislostí zajistí, že se efekt znovu spustí,
-    // jakmile se data donačtou.
-    }, [isDateValid, startDateObj, endDateObj, reservations, vehicles, selectedVehicleId, dataLoading]);
+    }, [isDateValid, startDateObj, endDateObj, reservations, vehicles, selectedVehicleId, pageLoading]);
 
 
     const selectedVehicle = useMemo(() => vehicles.find(v => v.id === selectedVehicleId), [vehicles, selectedVehicleId]);
@@ -132,12 +142,8 @@ const OnlineBooking: React.FC = () => {
     }, [selectedVehicle, isDateValid, startDateObj, endDateObj]);
 
     const handleSetDuration = (duration: number, unit: 'hours' | 'days') => {
-        if (!startDate) {
-            alert("Nejprve prosím vyberte počáteční datum a čas.");
-            return;
-        }
-        if (!startDateObj) {
-            alert("Zadané počáteční datum je neplatné. Zkuste ho prosím vybrat znovu.");
+        if (!startDate || !startDateObj) {
+            alert("Nejprve prosím vyberte platné počáteční datum a čas.");
             return;
         }
         const start = startDateObj;
@@ -158,6 +164,10 @@ const OnlineBooking: React.FC = () => {
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setError('');
+        if (!isDateValid || !startDateObj || !endDateObj) {
+            setError("Zvolený termín je neplatný.");
+            return;
+        }
         if (!selectedVehicleId) {
             setError('Prosím, vyberte vozidlo.');
             return;
@@ -173,13 +183,7 @@ const OnlineBooking: React.FC = () => {
         
         setIsProcessing(true);
         try {
-            if (!startDateObj || !endDateObj) throw new Error("Neplatné datum");
-            await actions.createOnlineReservation(
-                selectedVehicleId,
-                startDateObj,
-                endDateObj,
-                customerData
-            );
+            await actions.createOnlineReservation(selectedVehicleId, startDateObj, endDateObj, customerData);
             setIsSubmitted(true);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Rezervaci se nepodařilo vytvořit.');
@@ -188,7 +192,7 @@ const OnlineBooking: React.FC = () => {
         }
     };
     
-    if (dataLoading) {
+    if (pageLoading) {
          return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
                 <Loader className="w-10 h-10 animate-spin text-primary" /> 
@@ -224,11 +228,11 @@ const OnlineBooking: React.FC = () => {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium">Od (datum a čas)</label>
-                                        <input type="datetime-local" value={startDate} onChange={e => { setStartDate(e.target.value); }} className="w-full p-2 border rounded-md" required />
+                                        <input type="datetime-local" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-2 border rounded-md" required />
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium">Do (datum a čas)</label>
-                                        <input type="datetime-local" value={endDate} onChange={e => { setEndDate(e.target.value); }} className="w-full p-2 border rounded-md" required />
+                                        <input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-2 border rounded-md" required />
                                     </div>
                                 </div>
                                 {dateError && <p className="text-red-500 text-sm mt-2">{dateError}</p>}

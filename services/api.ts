@@ -198,7 +198,7 @@ export const onAuthStateChange = (callback: (session: Session | null) => void) =
     return subscription;
 };
 
-// --- Data Fetching ---
+// --- Data Fetching (For Authenticated Admin) ---
 export const getAllData = async () => {
     const [vehiclesRes, customersRes, reservationsRes, contractsRes, financialsRes, servicesRes] = await Promise.all([
         supabase.from('vehicles').select('*'),
@@ -224,6 +224,24 @@ export const getAllData = async () => {
         contracts: contractsRes.data!.map(fromContract),
         financials: financialsRes.data!.map(fromFinancial),
         services: servicesRes.data!.map(fromService),
+    };
+};
+
+// --- Data Fetching (For Public Booking Page) ---
+export const getPublicBookingData = async () => {
+    const [vehiclesRes, reservationsRes] = await Promise.all([
+        supabase.from('vehicles').select('*'),
+        // Only select columns needed for availability check to be efficient and secure
+        supabase.from('reservations').select('vehicle_id, start_date, end_date, status'),
+    ]);
+
+    handleSupabaseError(vehiclesRes, 'public vehicles');
+    handleSupabaseError(reservationsRes, 'public reservations');
+    
+    return {
+        vehicles: vehiclesRes.data!.map(fromVehicle),
+        // Note: fromReservation can handle partial data
+        reservations: reservationsRes.data!.map(fromReservation),
     };
 };
 
