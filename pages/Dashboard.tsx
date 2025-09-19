@@ -136,62 +136,63 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                 <KpiCard icon={ArrowDownCircle} title="Dnešní příjezdy" value={activityOutlook.today.arrivals} color="bg-indigo-500" />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 space-y-6">
-                    {reservationsToProcess.length > 0 && (
-                        <div className="bg-white p-5 rounded-lg shadow-md">
-                            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center"><ClipboardCheck className="mr-2 text-blue-600" />Nové rezervace ke zpracování</h2>
-                            <div className="space-y-3">
-                                {reservationsToProcess.map(res => (
-                                    <div key={res.id} className="p-3 bg-blue-50 rounded-md border border-blue-200 flex items-center justify-between">
-                                        <div>
-                                            <p className="font-semibold">{res.customer?.firstName} {res.customer?.lastName} - <a href={`tel:${res.customer?.phone}`} className="text-blue-600 hover:underline flex items-center"><Phone className="w-4 h-4 mr-1"/>{res.customer?.phone}</a></p>
-                                            <p className="text-sm text-gray-600">{res.vehicle?.name} ({new Date(res.startDate).toLocaleDateString('cs-CZ')} - {new Date(res.endDate).toLocaleDateString('cs-CZ')})</p>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            <button onClick={() => handleCancelReservation(res)} disabled={cancellingReservationId === res.id} className="p-2 text-red-600 hover:bg-red-100 rounded-full disabled:opacity-50" title="Zamítnout">
-                                                {cancellingReservationId === res.id ? <Loader className="w-5 h-5 animate-spin"/> : <XCircle className="w-5 h-5"/>}
-                                            </button>
-                                            <button onClick={() => handleGenerateContract(res)} disabled={processingReservationId === res.id} className="py-2 px-3 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-300 flex items-center">
-                                                {processingReservationId === res.id ? <Loader className="w-4 h-4 mr-2 animate-spin"/> : <Check className="w-4 h-4 mr-2"/>} Schválit
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
+            {/* Full-width banner for actionable items */}
+            {reservationsToProcess.length > 0 && (
+                <div className="bg-white p-5 rounded-lg shadow-md">
+                    <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center"><ClipboardCheck className="mr-2 text-blue-600" />Nové rezervace ke zpracování</h2>
+                    <div className="space-y-3">
+                        {reservationsToProcess.map(res => (
+                            <div key={res.id} className="p-3 bg-blue-50 rounded-md border border-blue-200 flex items-center justify-between">
+                                <div>
+                                    <p className="font-semibold">{res.customer?.firstName} {res.customer?.lastName} - <a href={`tel:${res.customer?.phone}`} className="text-blue-600 hover:underline flex items-center"><Phone className="w-4 h-4 mr-1"/>{res.customer?.phone}</a></p>
+                                    <p className="text-sm text-gray-600">{res.vehicle?.name} ({new Date(res.startDate).toLocaleDateString('cs-CZ')} - {new Date(res.endDate).toLocaleDateString('cs-CZ')})</p>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <button onClick={() => handleCancelReservation(res)} disabled={cancellingReservationId === res.id} className="p-2 text-red-600 hover:bg-red-100 rounded-full disabled:opacity-50" title="Zamítnout">
+                                        {cancellingReservationId === res.id ? <Loader className="w-5 h-5 animate-spin"/> : <XCircle className="w-5 h-5"/>}
+                                    </button>
+                                    <button onClick={() => handleGenerateContract(res)} disabled={processingReservationId === res.id} className="py-2 px-3 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-300 flex items-center">
+                                        {processingReservationId === res.id ? <Loader className="w-4 h-4 mr-2 animate-spin"/> : <Check className="w-4 h-4 mr-2"/>} Schválit
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    )}
-                    
-                    <div className="bg-white p-5 rounded-lg shadow-md">
-                        <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center"><Clock className="mr-2 text-gray-600" /> Časová osa dnešního dne</h2>
-                        {todaysActivities.length > 0 ? (
-                             <div className="relative pl-8">
-                                <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-gray-200"></div>
-                                {todaysActivities.map((activity, index) => (
-                                     <div key={`${activity.id}-${activity.type}`} className="mb-6 flex items-center">
-                                        <div className={`absolute left-0 -translate-x-1/2 p-1.5 rounded-full ${activity.type === 'departure' ? 'bg-blue-500' : 'bg-indigo-500'}`}>
-                                            {activity.type === 'departure' ? <ArrowUpCircle className="w-5 h-5 text-white" /> : <ArrowDownCircle className="w-5 h-5 text-white" />}
-                                        </div>
-                                        <div className="ml-4 flex-grow p-4 rounded-lg bg-gray-50 border">
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <p className="font-bold text-lg">{activity.time.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}</p>
-                                                    <p className="font-semibold">{activity.customer?.firstName} {activity.customer?.lastName}</p>
-                                                    <p className="text-sm text-gray-600">{activity.vehicle?.name}</p>
-                                                </div>
-                                                <button onClick={() => { setSelectedReservation(activity); setIsDetailModalOpen(true); }} className="text-sm text-primary hover:underline">Zobrazit</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <p className="text-gray-500 text-center py-4">Dnes nejsou naplánovány žádné příjezdy ani odjezdy.</p>
-                        )}
+                        ))}
                     </div>
                 </div>
+            )}
 
-                <div className="lg:col-span-1 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Left Column: Timeline */}
+                <div className="bg-white p-5 rounded-lg shadow-md">
+                    <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center"><Clock className="mr-2 text-gray-600" /> Časová osa dnešního dne</h2>
+                    {todaysActivities.length > 0 ? (
+                            <div className="relative pl-8">
+                            <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                            {todaysActivities.map((activity, index) => (
+                                    <div key={`${activity.id}-${activity.type}`} className="mb-6 flex items-center">
+                                    <div className={`absolute left-0 -translate-x-1/2 p-1.5 rounded-full ${activity.type === 'departure' ? 'bg-blue-500' : 'bg-indigo-500'}`}>
+                                        {activity.type === 'departure' ? <ArrowUpCircle className="w-5 h-5 text-white" /> : <ArrowDownCircle className="w-5 h-5 text-white" />}
+                                    </div>
+                                    <div className="ml-4 flex-grow p-4 rounded-lg bg-gray-50 border">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="font-bold text-lg">{activity.time.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}</p>
+                                                <p className="font-semibold">{activity.customer?.firstName} {activity.customer?.lastName}</p>
+                                                <p className="text-sm text-gray-600">{activity.vehicle?.name}</p>
+                                            </div>
+                                            <button onClick={() => { setSelectedReservation(activity); setIsDetailModalOpen(true); }} className="text-sm text-primary hover:underline">Zobrazit</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-gray-500 text-center py-4">Dnes nejsou naplánovány žádné příjezdy ani odjezdy.</p>
+                    )}
+                </div>
+
+                {/* Right Column: Other Widgets */}
+                <div className="space-y-6">
                     <div className="bg-white p-5 rounded-lg shadow-md">
                         <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center"><CalendarDays className="mr-2 text-gray-600"/>Přehled na 3 dny</h2>
                         <div className="space-y-3">
@@ -222,13 +223,13 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
 
                     {(serviceAlerts.length > 0) && (
                         <div className="bg-white p-5 rounded-lg shadow-md">
-                             <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center"><AlertTriangle className="mr-2 text-yellow-600" /> Upozornění</h2>
+                                <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center"><AlertTriangle className="mr-2 text-yellow-600" /> Upozornění</h2>
                             <div className="space-y-4">
                                 {serviceAlerts.map(service => (
-                                     <div key={service.id} className="p-3 bg-yellow-50 rounded-md border border-yellow-200">
-                                         <p className="font-semibold flex items-center"><Wrench className="w-4 h-4 mr-2" /> Blíží se servis</p>
-                                         <p className="text-sm text-gray-700">{service.vehicle?.name}: {service.description} ({new Date(service.serviceDate).toLocaleDateString('cs-CZ')})</p>
-                                     </div>
+                                        <div key={service.id} className="p-3 bg-yellow-50 rounded-md border border-yellow-200">
+                                            <p className="font-semibold flex items-center"><Wrench className="w-4 h-4 mr-2" /> Blíží se servis</p>
+                                            <p className="text-sm text-gray-700">{service.vehicle?.name}: {service.description} ({new Date(service.serviceDate).toLocaleDateString('cs-CZ')})</p>
+                                        </div>
                                 ))}
                             </div>
                         </div>
