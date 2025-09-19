@@ -20,20 +20,16 @@ const fromVehicle = (v: any): Vehicle => v && ({
     currentMileage: v.current_mileage,
     description: v.description,
     dimensions: v.dimensions,
-    stkValidUntil: v.stk_valid_until,
-    insuranceValidUntil: v.insurance_valid_until,
 });
 
 const toVehicle = (v: Partial<Vehicle>) => {
-    const { licensePlate, imageUrl, dailyRate, currentMileage, stkValidUntil, insuranceValidUntil, ...rest } = v;
+    const { licensePlate, imageUrl, dailyRate, currentMileage, ...rest } = v;
     const payload = {
         ...rest,
         license_plate: licensePlate,
         image_url: imageUrl,
         daily_rate: dailyRate,
         current_mileage: currentMileage,
-        stk_valid_until: stkValidUntil,
-        insurance_valid_until: insuranceValidUntil,
     };
     Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
     return payload;
