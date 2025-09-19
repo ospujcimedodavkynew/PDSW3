@@ -4,22 +4,53 @@ import { UserPlus, Car, Calendar as CalendarIcon, Signature, Edit } from 'lucide
 import SignatureModal from '../components/SignatureModal';
 import { useData } from '../contexts/DataContext';
 
+const FORM_DRAFT_KEY = 'reservationFormDraft';
+
 const Reservations: React.FC = () => {
     const { data, loading, actions } = useData();
     const { vehicles, customers, reservations } = data;
+
+    const loadDraft = () => {
+        try {
+            const savedDraft = sessionStorage.getItem(FORM_DRAFT_KEY);
+            if (savedDraft) {
+                return JSON.parse(savedDraft);
+            }
+        } catch (error) {
+            console.error("Could not load form draft from sessionStorage", error);
+            sessionStorage.removeItem(FORM_DRAFT_KEY);
+        }
+        return {};
+    };
     
-    // Form states
+    // Form states initialized from sessionStorage
     const [isProcessing, setIsProcessing] = useState(false);
-    const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
-    const [isNewCustomer, setIsNewCustomer] = useState(false);
-    const [newCustomerData, setNewCustomerData] = useState<Omit<Customer, 'id'>>({ firstName: '', lastName: '', email: '', phone: '', driverLicenseNumber: '', address: '' });
-    const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
+    const [selectedCustomerId, setSelectedCustomerId] = useState<string>(() => loadDraft().selectedCustomerId || '');
+    const [isNewCustomer, setIsNewCustomer] = useState<boolean>(() => loadDraft().isNewCustomer || false);
+    const [newCustomerData, setNewCustomerData] = useState<Omit<Customer, 'id'>>(() => loadDraft().newCustomerData || { firstName: '', lastName: '', email: '', phone: '', driverLicenseNumber: '', address: '' });
+    const [selectedVehicleId, setSelectedVehicleId] = useState<string>(() => loadDraft().selectedVehicleId || '');
+    const [startDate, setStartDate] = useState(() => loadDraft().startDate || '');
+    const [endDate, setEndDate] = useState(() => loadDraft().endDate || '');
     
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
     const [signatureDataUrl, setSignatureDataUrl] = useState<string>('');
     
+    // Save form state to sessionStorage whenever it changes
+    useEffect(() => {
+        const draft = {
+            selectedCustomerId,
+            isNewCustomer,
+            newCustomerData,
+            selectedVehicleId,
+            startDate,
+            endDate,
+        };
+        // Avoid saving the initial empty state
+        if (selectedCustomerId || selectedVehicleId || startDate || endDate || newCustomerData.firstName) {
+            sessionStorage.setItem(FORM_DRAFT_KEY, JSON.stringify(draft));
+        }
+    }, [selectedCustomerId, isNewCustomer, newCustomerData, selectedVehicleId, startDate, endDate]);
+
     // Memoized calculations for performance
     const selectedCustomer = useMemo(() => customers.find(c => c.id === selectedCustomerId), [customers, selectedCustomerId]);
     const selectedVehicle = useMemo(() => vehicles.find(v => v.id === selectedVehicleId), [vehicles, selectedVehicleId]);
@@ -28,7 +59,7 @@ const Reservations: React.FC = () => {
         if (!startDate || !endDate) return [];
         const start = new Date(startDate);
         const end = new Date(endDate);
-        if (end <= start) return [];
+        if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) return [];
         
         const conflictingVehicleIds = new Set<string>();
         for (const r of reservations) {
@@ -59,7 +90,7 @@ const Reservations: React.FC = () => {
         if (!selectedVehicle || !startDate || !endDate) return 0;
         const start = new Date(startDate);
         const end = new Date(endDate);
-        if (end <= start) return 0;
+        if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) return 0;
 
         const durationHours = (end.getTime() - start.getTime()) / (1000 * 3600);
         
@@ -76,6 +107,10 @@ const Reservations: React.FC = () => {
             return;
         }
         const start = new Date(startDate);
+        if (isNaN(start.getTime())) {
+             alert("Zvolené počáteční datum je neplatné.");
+             return;
+        }
         const end = new Date(start.getTime() + hours * 60 * 60 * 1000);
         
         const pad = (num: number) => num.toString().padStart(2, '0');
@@ -118,90 +153,20 @@ const Reservations: React.FC = () => {
 
             if (!customerForContract) throw new Error("Nepodařilo se nalézt data zákazníka.");
             
-            const newReservation = await actions.addReservation({
+            const newReservationData: Omit<Reservation, 'id' | 'status'> = {
                 customerId: finalCustomerId,
                 vehicleId: selectedVehicleId,
                 startDate: new Date(startDate),
                 endDate: new Date(endDate),
-            });
+            };
+
+            const newReservation = await actions.addReservation(newReservationData);
+            
             const contractVehicle = vehicles.find(v => v.id === selectedVehicleId);
             if (!contractVehicle) throw new Error("Vozidlo nebylo nalezeno.");
 
-            // Generate professional contract text
-            const contractText = `
-SMLOUVA O NÁJMU DOPRAVNÍHO PROSTŘEDKU
-=========================================
-
-Článek I. - Smluvní strany
------------------------------------------
-Pronajímatel:
-Milan Gula
-Ghegova 117, Brno Nové Sady, 60200
-Web: pujcimedodavky.cz
-IČO: 07031653
-(dále jen "pronajímatel")
-
-Nájemce:
-Jméno: ${customerForContract.firstName} ${customerForContract.lastName}
-Adresa: ${customerForContract.address}
-Email: ${customerForContract.email}
-Telefon: ${customerForContract.phone}
-Číslo ŘP: ${customerForContract.driverLicenseNumber}
-(dále jen "nájemce")
-
-Článek II. - Předmět a účel nájmu
------------------------------------------
-1. Pronajímatel tímto přenechává nájemci do dočasného užívání (nájmu) následující motorové vozidlo (dále jen "předmět nájmu" nebo "vozidlo"):
-   Vozidlo: ${contractVehicle.name} (${contractVehicle.make} ${contractVehicle.model})
-   SPZ: ${contractVehicle.licensePlate}
-   Rok výroby: ${contractVehicle.year}
-2. Nájemce se zavazuje užívat vozidlo k obvyklému účelu a v souladu s platnými právními předpisy.
-
-Článek III. - Doba nájmu a cena
------------------------------------------
-1. Doba nájmu je sjednána od: ${new Date(startDate).toLocaleString('cs-CZ')} do: ${new Date(endDate).toLocaleString('cs-CZ')}.
-2. Celková cena nájmu činí: ${totalPrice.toLocaleString('cs-CZ')} Kč. Cena je splatná při převzetí vozidla, není-li dohodnuto jinak.
-3. Nájemce bere na vědomí, že denní limit pro nájezd je 300 km. Za každý kilometr nad tento limit (vypočtený jako 300 km * počet dní pronájmu) bude účtován poplatek 3 Kč/km.
-   Počáteční stav kilometrů: ${(contractVehicle.currentMileage ?? 0).toLocaleString('cs-CZ')} km.
-
-Článek IV. - Vratná kauce (jistota)
------------------------------------------
-1. Nájemce skládá při podpisu této smlouvy a předání vozidla vratnou kauci ve výši 5.000 Kč (slovy: pět tisíc korun českých) v hotovosti nebo na bankovní účet pronajímatele. Tato kauce je plně vratná za podmínek uvedených níže.
-2. Tato kauce slouží k zajištění případných pohledávek pronajímatele vůči nájemci (např. na úhradu škody, smluvních pokut, nákladů na dotankování paliva atd.).
-3. Kauce bude nájemci vrácena v plné výši po řádném vrácení vozidla, a to bezodkladně, pokud nebudou shledány žádné vady či škody. V opačném případě je pronajímatel oprávněn kauci (nebo její část) použít na úhradu svých pohledávek.
-
-Článek V. - Práva a povinnosti stran
------------------------------------------
-1. Nájemce svým podpisem potvrzuje, že vozidlo převzal v řádném technickém stavu, bez zjevných závad, s kompletní povinnou výbavou a s plnou nádrží pohonných hmot.
-2. Nájemce je povinen užívat vozidlo s péčí řádného hospodáře, chránit ho před poškozením, ztrátou či zničením a dodržovat pokyny výrobce pro jeho provoz.
-3. V celém vozidle je PŘÍSNĚ ZAKÁZÁNO KOUŘIT. V případě porušení tohoto zákazu je nájemce povinen uhradit smluvní pokutu ve výši 500 Kč.
-4. Nájemce je povinen vrátit vozidlo s plnou nádrží pohonných hmot. V případě vrácení vozidla s neúplnou nádrží je nájemce povinen uhradit náklady na dotankování a smluvní pokutu ve výši 500 Kč.
-5. Nájemce není oprávněn provádět na vozidle jakékoliv úpravy, přenechat ho do podnájmu třetí osobě, ani ho použít k účasti na závodech, k trestné činnosti či k přepravě nebezpečných nákladů.
-
-Článek VI. - Odpovědnost za škodu a spoluúčast
------------------------------------------
-1. V případě poškození předmětu nájmu zaviněného nájemcem, nebo v případě odcizení, se sjednává spoluúčast nájemce na vzniklé škodě.
-2. Výše spoluúčasti činí 5.000 Kč při poškození pronajatého vozidla.
-3. V případě dopravní nehody, při které dojde k poškození jiných vozidel nebo majetku třetích stran, činí spoluúčast 10.000 Kč.
-4. Nájemce je povinen každou dopravní nehodu, poškození vozidla nebo jeho odcizení neprodleně ohlásit pronajímateli a Policii ČR.
-
-Článek VII. - Závěrečná ustanovení
------------------------------------------
-1. Tato smlouva nabývá platnosti a účinnosti dnem jejího podpisu oběma smluvními stranami.
-2. Smluvní strany prohlašují, že si smlouvu přečetly, s jejím obsahem souhlasí a na důkaz toho připojují své podpisy.
-3. Tato smlouva je vyhotovena elektronicky. Nájemce svým digitálním podpisem stvrzuje, že se seznámil s obsahem smlouvy, souhlasí s ním a vozidlo v uvedeném stavu přebírá.
-
-Digitální podpis nájemce:
-(viz přiložený obrazový soubor)
-            `;
-            
-            await actions.addContract({
-                reservationId: newReservation.id,
-                customerId: finalCustomerId,
-                vehicleId: selectedVehicleId,
-                generatedAt: new Date(),
-                contractText,
-            });
+            // Generate contract using the centralized action
+            const { contractText } = await actions.generateAndSendContract(newReservation, customerForContract, contractVehicle);
 
             const bccEmail = "smlouvydodavky@gmail.com";
             const mailtoBody = encodeURIComponent(contractText);
@@ -211,6 +176,9 @@ Digitální podpis nájemce:
 
             alert("Rezervace byla úspěšně vytvořena a smlouva uložena! Nyní budete přesměrováni do emailového klienta pro odeslání smlouvy.");
             
+            // Clear the draft from sessionStorage
+            sessionStorage.removeItem(FORM_DRAFT_KEY);
+
             // Reset form
             setSelectedCustomerId('');
             setIsNewCustomer(false);

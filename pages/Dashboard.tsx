@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Reservation, Vehicle, Page, VehicleService } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { Car, Users, CalendarCheck, AlertTriangle, Link, Clock, ArrowRightLeft, Wrench } from 'lucide-react';
+import { Car, Users, CalendarCheck, AlertTriangle, Link, Clock, ArrowRightLeft, Wrench, ClipboardCheck, Send } from 'lucide-react';
 import ReservationDetailModal from '../components/ReservationDetailModal';
 import SelfServiceModal from '../components/SelfServiceModal';
 import { useData } from '../contexts/DataContext';
@@ -11,12 +11,37 @@ const COLORS = { available: '#22C55E', rented: '#F59E0B', maintenance: '#EF4444'
 
 const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurrentPage }) => {
     const { data, loading, actions } = useData();
-    const { vehicles, reservations, services } = data;
+    const { vehicles, reservations, services, contracts } = data;
 
     const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [isSelfServiceModalOpen, setIsSelfServiceModalOpen] = useState(false);
+    const [processingReservationId, setProcessingReservationId] = useState<string | null>(null);
 
+    const reservationsToProcess = useMemo(() => {
+        const contractReservationIds = new Set(contracts.map(c => c.reservationId));
+        return reservations.filter(r => r.status === 'scheduled' && !contractReservationIds.has(r.id));
+    }, [reservations, contracts]);
+
+    const handleGenerateContract = async (reservation: Reservation) => {
+        if (!reservation.customer || !reservation.vehicle) {
+            alert("Chyba: K této rezervaci chybí údaje o zákazníkovi nebo vozidle.");
+            return;
+        }
+        setProcessingReservationId(reservation.id);
+        try {
+            const { contractText, customer, vehicle } = await actions.generateAndSendContract(reservation, reservation.customer, reservation.vehicle);
+            const bccEmail = "smlouvydodavky@gmail.com";
+            const mailtoBody = encodeURIComponent(contractText);
+            const mailtoLink = `mailto:${customer.email}?bcc=${bccEmail}&subject=${encodeURIComponent(`Smlouva o pronájmu vozidla ${vehicle.name}`)}&body=${mailtoBody}`;
+            window.location.href = mailtoLink;
+        } catch (error) {
+            console.error("Failed to generate contract:", error);
+            alert(`Nepodařilo se vygenerovat smlouvu: ${error instanceof Error ? error.message : "Neznámá chyba"}`);
+        } finally {
+            setProcessingReservationId(null);
+        }
+    };
 
     const serviceAlerts = useMemo(() => {
         const today = new Date();
@@ -98,6 +123,36 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                     </button>
                 </div>
             </div>
+
+            {/* New Reservations to Process */}
+            {reservationsToProcess.length > 0 && (
+                <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-secondary">
+                    <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center">
+                        <ClipboardCheck className="mr-2 text-secondary-hover" /> Nové rezervace ke zpracování
+                    </h2>
+                    <ul className="space-y-3">
+                        {reservationsToProcess.map(res => (
+                            <li key={res.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 rounded-md bg-yellow-50">
+                                <div>
+                                    <p className="font-semibold">{res.customer?.firstName} {res.customer?.lastName}</p>
+                                    <p className="text-sm text-gray-500">
+                                        {res.vehicle?.name} | {new Date(res.startDate).toLocaleDateString('cs-CZ')} - {new Date(res.endDate).toLocaleDateString('cs-CZ')}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => handleGenerateContract(res)}
+                                    disabled={processingReservationId === res.id}
+                                    className="mt-2 sm:mt-0 bg-secondary text-dark-text px-3 py-2 rounded-lg hover:bg-secondary-hover text-sm font-semibold flex items-center disabled:bg-gray-400 disabled:cursor-wait"
+                                >
+                                    <Send className="w-4 h-4 mr-2" />
+                                    {processingReservationId === res.id ? 'Zpracovávám...' : 'Vystavit a odeslat smlouvu'}
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
 
             {/* Key Metrics */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
