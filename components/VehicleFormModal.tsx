@@ -96,6 +96,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, ve
                      <textarea name="description" placeholder="Marketingový popisek vozidla" value={formData.description || ''} onChange={handleChange} className="w-full p-2 border rounded h-20" />
                      <input name="dimensions" type="text" placeholder="Rozměry (např. Ložná plocha: 3.2m x 1.8m)" value={formData.dimensions || ''} onChange={handleChange} className="w-full p-2 border rounded" />
 
+
                     {error && <p className="text-red-500 text-sm">{error}</p>}
                     
                     <div className="flex justify-end space-x-3 pt-2">

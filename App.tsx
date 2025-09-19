@@ -43,7 +43,7 @@ const AppContent: React.FC = () => {
         switch (currentPage) {
             case Page.DASHBOARD: return <Dashboard setCurrentPage={setCurrentPage} />;
             case Page.RESERVATIONS: return <Reservations />;
-            case Page.CALENDAR: return <Calendar setCurrentPage={setCurrentPage} />;
+            case Page.CALENDAR: return <Calendar />;
             case Page.VEHICLES: return <Vehicles />;
             case Page.CUSTOMERS: return <Customers />;
             case Page.CONTRACTS: return <Contracts />;
