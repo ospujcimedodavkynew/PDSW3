@@ -21,6 +21,7 @@ interface DataContextActions {
     addVehicle: (vehicleData: Omit<Vehicle, 'id'>) => Promise<Vehicle>;
     updateVehicle: (vehicleData: Vehicle) => Promise<void>;
     addReservation: (reservationData: Omit<Reservation, 'id' | 'status'>) => Promise<Reservation>;
+    cancelReservation: (reservationId: string) => Promise<void>;
     activateReservation: (reservationId: string, startMileage: number) => Promise<void>;
     completeReservation: (reservationId: string, endMileage: number, notes: string) => Promise<void>;
     addContract: (contractData: Omit<Contract, 'id'>) => Promise<void>;
@@ -158,6 +159,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const newReservation = await api.addReservation(resData);
             setData(prev => expandData({ ...prev, reservations: [...prev.reservations, newReservation] }));
             return newReservation;
+        },
+        cancelReservation: async (reservationId) => {
+            await api.updateReservation(reservationId, { status: 'cancelled' });
+            await refreshData();
         },
         activateReservation: async (reservationId, startMileage) => {
             const reservation = data.reservations.find(r => r.id === reservationId);

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Reservation, Vehicle, Page, VehicleService } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { Car, Users, CalendarCheck, AlertTriangle, Link, Clock, ArrowRightLeft, Wrench, ClipboardCheck, Send, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { Car, Users, CalendarCheck, AlertTriangle, Link, Clock, ArrowRightLeft, Wrench, ClipboardCheck, Send, ArrowUpCircle, ArrowDownCircle, Phone, Check, XCircle } from 'lucide-react';
 import ReservationDetailModal from '../components/ReservationDetailModal';
 import SelfServiceModal from '../components/SelfServiceModal';
 import { useData } from '../contexts/DataContext';
@@ -17,6 +17,7 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [isSelfServiceModalOpen, setIsSelfServiceModalOpen] = useState(false);
     const [processingReservationId, setProcessingReservationId] = useState<string | null>(null);
+    const [cancellingReservationId, setCancellingReservationId] = useState<string | null>(null);
 
     const reservationsToProcess = useMemo(() => {
         const contractReservationIds = new Set(contracts.map(c => c.reservationId));
@@ -42,6 +43,21 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
             setProcessingReservationId(null);
         }
     };
+    
+    const handleCancelReservation = async (reservation: Reservation) => {
+        if (window.confirm(`Opravdu si přejete zamítnout rezervaci pro zákazníka ${reservation.customer?.firstName} ${reservation.customer?.lastName}?`)) {
+            setCancellingReservationId(reservation.id);
+            try {
+                await actions.cancelReservation(reservation.id);
+            } catch (error) {
+                console.error("Failed to cancel reservation:", error);
+                alert(`Nepodařilo se zamítnout rezervaci: ${error instanceof Error ? error.message : "Neznámá chyba"}`);
+            } finally {
+                setCancellingReservationId(null);
+            }
+        }
+    };
+
 
     const serviceAlerts = useMemo(() => {
         const today = new Date();
@@ -167,19 +183,35 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                         {reservationsToProcess.map(res => (
                             <li key={res.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 rounded-md bg-yellow-50">
                                 <div>
-                                    <p className="font-semibold">{res.customer?.firstName} {res.customer?.lastName}</p>
+                                    <p className="font-semibold text-lg text-gray-800">{res.customer?.firstName} {res.customer?.lastName}</p>
+                                    {res.customer?.phone && (
+                                        <a href={`tel:${res.customer.phone}`} className="flex items-center text-blue-600 hover:underline font-bold my-1">
+                                            <Phone className="w-4 h-4 mr-2" />
+                                            {res.customer.phone}
+                                        </a>
+                                    )}
                                     <p className="text-sm text-gray-500">
                                         {res.vehicle?.name} | {new Date(res.startDate).toLocaleDateString('cs-CZ')} - {new Date(res.endDate).toLocaleDateString('cs-CZ')}
                                     </p>
                                 </div>
-                                <button
-                                    onClick={() => handleGenerateContract(res)}
-                                    disabled={processingReservationId === res.id}
-                                    className="mt-2 sm:mt-0 bg-secondary text-dark-text px-3 py-2 rounded-lg hover:bg-secondary-hover text-sm font-semibold flex items-center disabled:bg-gray-400 disabled:cursor-wait"
-                                >
-                                    <Send className="w-4 h-4 mr-2" />
-                                    {processingReservationId === res.id ? 'Zpracovávám...' : 'Vystavit a odeslat smlouvu'}
-                                </button>
+                                <div className="flex items-center space-x-2 mt-2 sm:mt-0 flex-shrink-0">
+                                    <button
+                                        onClick={() => handleCancelReservation(res)}
+                                        disabled={processingReservationId === res.id || cancellingReservationId === res.id}
+                                        className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 text-sm font-semibold flex items-center disabled:bg-gray-400 disabled:cursor-wait"
+                                    >
+                                        <XCircle className="w-4 h-4 mr-2" />
+                                        {cancellingReservationId === res.id ? 'Zamítám...' : 'Zamítnout'}
+                                    </button>
+                                    <button
+                                        onClick={() => handleGenerateContract(res)}
+                                        disabled={processingReservationId === res.id || cancellingReservationId === res.id}
+                                        className="bg-green-500 text-white px-3 py-2 rounded-lg hover:bg-green-600 text-sm font-semibold flex items-center disabled:bg-gray-400 disabled:cursor-wait"
+                                    >
+                                        <Check className="w-4 h-4 mr-2" />
+                                        {processingReservationId === res.id ? 'Schvaluji...' : 'Schválit a odeslat'}
+                                    </button>
+                                </div>
                             </li>
                         ))}
                     </ul>

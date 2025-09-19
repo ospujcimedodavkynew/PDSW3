@@ -9,6 +9,7 @@ const statusColors: { [key in Reservation['status']]: string } = {
     'scheduled': 'bg-green-400 border-green-500 text-green-800',
     'active': 'bg-blue-400 border-blue-500 text-blue-800',
     'completed': 'bg-gray-400 border-gray-500 text-gray-800',
+    'cancelled': 'bg-red-300 border-red-400 text-red-800 line-through',
 };
 
 const Calendar: React.FC = () => {
@@ -85,6 +86,8 @@ const Calendar: React.FC = () => {
 
                     {/* Reservation Bars */}
                     {reservations.map(res => {
+                        if (res.status === 'cancelled') return null;
+                        
                         const vehicleIndex = vehicles.findIndex(v => v.id === res.vehicleId);
                         if (vehicleIndex === -1) return null; // Don't render if vehicle not found
 
