@@ -25,6 +25,8 @@ export interface Vehicle {
     currentMileage: number;
     description?: string;
     dimensions?: string;
+    stkValidUntil?: Date | string;
+    insuranceValidUntil?: Date | string;
 }
 
 export interface Customer {

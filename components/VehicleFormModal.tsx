@@ -16,6 +16,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, ve
         name: '', licensePlate: '', year: new Date().getFullYear(), status: 'available',
         rate4h: 0, rate12h: 0, dailyRate: 0, currentMileage: 0,
         make: '', model: '', imageUrl: '', description: '', dimensions: '',
+        stkValidUntil: '', insuranceValidUntil: '',
     };
 
     const [formData, setFormData] = useState<Partial<Vehicle>>(getInitialData(vehicle));
@@ -95,6 +96,18 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, ve
                      <input name="imageUrl" type="text" placeholder="URL obrázku vozidla" value={formData.imageUrl || ''} onChange={handleChange} className="w-full p-2 border rounded" />
                      <textarea name="description" placeholder="Marketingový popisek vozidla" value={formData.description || ''} onChange={handleChange} className="w-full p-2 border rounded h-20" />
                      <input name="dimensions" type="text" placeholder="Rozměry (např. Ložná plocha: 3.2m x 1.8m)" value={formData.dimensions || ''} onChange={handleChange} className="w-full p-2 border rounded" />
+                     <hr />
+                    <h3 className="font-semibold">Termíny a platnosti</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Platnost STK do:</label>
+                            <input name="stkValidUntil" type="date" value={formData.stkValidUntil ? (formData.stkValidUntil.toString().split('T')[0]) : ''} onChange={handleChange} className="w-full p-2 border rounded" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Pojištění platné do:</label>
+                            <input name="insuranceValidUntil" type="date" value={formData.insuranceValidUntil ? (formData.insuranceValidUntil.toString().split('T')[0]) : ''} onChange={handleChange} className="w-full p-2 border rounded" />
+                        </div>
+                    </div>
 
 
                     {error && <p className="text-red-500 text-sm">{error}</p>}

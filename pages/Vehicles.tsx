@@ -1,10 +1,35 @@
 import React, { useState, useMemo } from 'react';
 import type { Vehicle } from '../types';
-import { Wrench, ShieldAlert, Plus, Edit, Search } from 'lucide-react';
+import { Wrench, ShieldAlert, Plus, Edit, Search, ShieldCheck } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import ServiceHistoryModal from '../components/ServiceHistoryModal';
 import DamageHistoryModal from '../components/DamageHistoryModal';
 import VehicleFormModal from '../components/VehicleFormModal';
+
+const getDeadlineStatus = (dateString?: string | Date): { text: string; color: string; } => {
+    if (!dateString) return { text: 'Nezadáno', color: 'text-gray-400' };
+
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return { text: 'Chybné datum', color: 'text-red-500 font-bold' };
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const diffTime = date.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    let color = 'text-gray-600';
+    if (diffDays < 0) {
+        color = 'text-red-600 font-bold';
+    } else if (diffDays <= 30) {
+        color = 'text-yellow-600 font-semibold';
+    }
+
+    return {
+        text: date.toLocaleDateString('cs-CZ'),
+        color,
+    };
+};
 
 const VehicleCard: React.FC<{
     vehicle: Vehicle;
@@ -18,6 +43,9 @@ const VehicleCard: React.FC<{
         rented: { text: 'Pronajato', color: 'bg-yellow-500' },
         maintenance: { text: 'V servisu', color: 'bg-red-500' },
     };
+
+    const stkStatus = getDeadlineStatus(vehicle.stkValidUntil);
+    const insuranceStatus = getDeadlineStatus(vehicle.insuranceValidUntil);
     
     return (
         <div className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col">
@@ -32,13 +60,24 @@ const VehicleCard: React.FC<{
                 <p className="text-gray-600">{vehicle.licensePlate} &bull; {vehicle.year}</p>
                 <p className="text-sm text-gray-500 mt-1">{vehicle.currentMileage.toLocaleString('cs-CZ')} km</p>
                 
-                <div className="mt-4 pt-4 border-t flex-grow">
+                <div className="my-3 pt-3 border-t space-y-2 text-sm">
+                    <p className={`flex items-center justify-between ${stkStatus.color}`}>
+                        <span className="flex items-center"><ShieldCheck className="w-4 h-4 mr-2" /> STK platná do:</span>
+                        <span className="font-medium">{stkStatus.text}</span>
+                    </p>
+                    <p className={`flex items-center justify-between ${insuranceStatus.color}`}>
+                        <span className="flex items-center"><ShieldCheck className="w-4 h-4 mr-2" /> Pojištění do:</span>
+                        <span className="font-medium">{insuranceStatus.text}</span>
+                    </p>
+                </div>
+                
+                <div className="pt-3 border-t">
                     <p className="text-sm">4h: <span className="font-bold">{vehicle.rate4h} Kč</span></p>
                     <p className="text-sm">12h: <span className="font-bold">{vehicle.rate12h} Kč</span></p>
                     <p className="text-sm">Den: <span className="font-bold">{vehicle.dailyRate} Kč</span></p>
                 </div>
                 
-                 <div className="mt-4 flex space-x-2">
+                 <div className="mt-auto pt-4 border-t flex space-x-2">
                     <button onClick={() => onEdit(vehicle)} className="flex-1 bg-gray-100 text-gray-800 text-sm py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center">
                         <Edit className="w-4 h-4 mr-2" /> Upravit
                     </button>
