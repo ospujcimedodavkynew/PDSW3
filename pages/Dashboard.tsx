@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Reservation, Vehicle, Page, VehicleService } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { Car, Users, CalendarCheck, AlertTriangle, Link, Clock, ArrowRightLeft, Wrench, ClipboardCheck, Send } from 'lucide-react';
+import { Car, Users, CalendarCheck, AlertTriangle, Link, Clock, ArrowRightLeft, Wrench, ClipboardCheck, Send, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import ReservationDetailModal from '../components/ReservationDetailModal';
 import SelfServiceModal from '../components/SelfServiceModal';
 import { useData } from '../contexts/DataContext';
@@ -65,18 +65,54 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
 
     const todaysDepartures = reservations
-        .filter(r => r.status === 'scheduled' && new Date(r.startDate) >= today && new Date(r.startDate) < tomorrow)
+        .filter(r => r.status === 'scheduled' && new Date(r.startDate) >= today && new Date(r.startDate) < new Date(today.getTime() + 24 * 60 * 60 * 1000))
         .map(r => ({ ...r, type: 'departure' as const, time: new Date(r.startDate) }));
 
     const todaysArrivals = reservations
-        .filter(r => r.status === 'active' && new Date(r.endDate) >= today && new Date(r.endDate) < tomorrow)
+        .filter(r => r.status === 'active' && new Date(r.endDate) >= today && new Date(r.endDate) < new Date(today.getTime() + 24 * 60 * 60 * 1000))
         .map(r => ({ ...r, type: 'arrival' as const, time: new Date(r.endDate) }));
 
     const todaysActivities = [...todaysDepartures, ...todaysArrivals].sort((a, b) => a.time.getTime() - b.time.getTime());
+    
+    const threeDayOutlook = useMemo(() => {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date(todayStart);
+        todayEnd.setHours(23, 59, 59, 999);
+
+        const tomorrowStart = new Date(todayStart);
+        tomorrowStart.setDate(todayStart.getDate() + 1);
+        const tomorrowEnd = new Date(tomorrowStart);
+        tomorrowEnd.setHours(23, 59, 59, 999);
+
+        const dayAfterStart = new Date(todayStart);
+        dayAfterStart.setDate(todayStart.getDate() + 2);
+        const dayAfterEnd = new Date(dayAfterStart);
+        dayAfterEnd.setHours(23, 59, 59, 999);
+
+        const countActivities = (start: Date, end: Date) => {
+            const departures = reservations.filter(r => 
+                r.status === 'scheduled' && 
+                new Date(r.startDate) >= start && 
+                new Date(r.startDate) <= end
+            ).length;
+            const arrivals = reservations.filter(r => 
+                r.status === 'active' && 
+                new Date(r.endDate) >= start && 
+                new Date(r.endDate) <= end
+            ).length;
+            return { departures, arrivals };
+        };
+
+        return [
+            { day: 'Dnes', ...countActivities(todayStart, todayEnd) },
+            { day: 'Zítra', ...countActivities(tomorrowStart, tomorrowEnd) },
+            { day: 'Pozítří', ...countActivities(dayAfterStart, dayAfterEnd) },
+        ];
+    }, [reservations]);
+
 
     const activeRentals = reservations.filter(r => r.status === 'active');
 
@@ -90,12 +126,9 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
     const handleCloseModal = () => {
         setIsDetailModalOpen(false);
         setSelectedReservation(null);
-        // Data will be refreshed by the context if an action was taken
     };
     
     const onSelfServiceLinkGenerated = () => {
-        // We might need a more targeted refresh here in the future,
-        // but for now, the context handles broader updates.
         actions.refreshData();
     }
 
@@ -202,39 +235,46 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
             </div>
             
             {/* Action Center */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-lg shadow-md">
-                     <h2 className="text-xl font-bold text-gray-700 mb-4">Dnešní aktivity</h2>
-                     {todaysActivities.length > 0 ? (
-                        <ul className="space-y-3">
-                           {todaysActivities.map(res => (
-                               <li key={res.id} className={`flex justify-between items-center p-3 rounded-md ${res.type === 'departure' ? 'bg-green-50' : 'bg-yellow-50'}`}>
-                                 <div>
-                                    <p className="font-semibold">{res.customer?.firstName} {res.customer?.lastName}</p>
-                                    <p className="text-sm text-gray-500">{res.vehicle?.name} - <Clock className="inline w-3 h-3 mr-1"/>{res.time.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}</p>
-                                 </div>
-                                 {res.type === 'departure' ? (
-                                    <button
-                                        onClick={() => handleOpenDetailModal(res)}
-                                        disabled={res.vehicle?.status !== 'available'}
-                                        className={`px-3 py-1 rounded text-sm font-semibold text-white transition-colors ${
-                                            res.vehicle?.status === 'available'
-                                            ? 'bg-green-500 hover:bg-green-600'
-                                            : 'bg-gray-400 cursor-not-allowed'
-                                        }`}
-                                        title={res.vehicle?.status !== 'available' ? 'Vozidlo není k dispozici (je pronajaté nebo v servisu)' : 'Vydat vozidlo'}
-                                    >
-                                        {res.vehicle?.status === 'available' ? 'Vydat' : 'Blokováno'}
-                                    </button>
-                                 ) : (
-                                    <button onClick={() => handleOpenDetailModal(res)} className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 text-sm font-semibold">
-                                        Převzít
-                                    </button>
-                                 )}
-                               </li>
-                           ))}
-                        </ul>
-                     ) : <p className="text-gray-500">Dnes nejsou plánované žádné odjezdy ani příjezdy.</p>}
+                    <h2 className="text-xl font-bold text-gray-700 mb-4">Časová osa dnešních aktivit</h2>
+                    {todaysActivities.length > 0 ? (
+                        <div className="relative pl-4">
+                            <div className="absolute left-4 top-0 h-full w-0.5 bg-gray-200" aria-hidden="true"></div>
+                            <ul className="space-y-8">
+                                {todaysActivities.map((res, index) => (
+                                    <li key={`${res.id}-${index}`} className="relative pl-8">
+                                        <div className={`absolute -left-1.5 top-1 w-4 h-4 rounded-full border-2 border-white ${res.type === 'departure' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+                                        <div className="flex justify-between items-center">
+                                            <div>
+                                                <p className="font-bold text-sm text-gray-800">{res.time.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}</p>
+                                                <p className="font-semibold">{res.customer?.firstName} {res.customer?.lastName}</p>
+                                                <p className="text-sm text-gray-500">{res.vehicle?.name}</p>
+                                            </div>
+                                            {res.type === 'departure' ? (
+                                                <button
+                                                    onClick={() => handleOpenDetailModal(res)}
+                                                    disabled={res.vehicle?.status !== 'available'}
+                                                    className={`px-3 py-1 rounded text-sm font-semibold text-white transition-colors ${
+                                                        res.vehicle?.status === 'available'
+                                                        ? 'bg-green-500 hover:bg-green-600'
+                                                        : 'bg-gray-400 cursor-not-allowed'
+                                                    }`}
+                                                    title={res.vehicle?.status !== 'available' ? 'Vozidlo není k dispozici (je pronajaté nebo v servisu)' : 'Vydat vozidlo'}
+                                                >
+                                                    Vydat
+                                                </button>
+                                            ) : (
+                                                <button onClick={() => handleOpenDetailModal(res)} className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 text-sm font-semibold">
+                                                    Převzít
+                                                </button>
+                                            )}
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    ) : <p className="text-gray-500 pt-4">Dnes nejsou plánované žádné odjezdy ani příjezdy.</p>}
                 </div>
                 <div className="bg-white p-6 rounded-lg shadow-md">
                     <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center">
@@ -247,16 +287,36 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                                  <div>
                                     <p className="font-semibold">{res.customer?.firstName} {res.customer?.lastName}</p>
                                     <p className="text-sm text-gray-500">
-                                        {res.vehicle?.name} | Plánovaný návrat: {new Date(res.endDate).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' })} v {new Date(res.endDate).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}
+                                        {res.vehicle?.name} | Návrat: {new Date(res.endDate).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' })} v {new Date(res.endDate).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}
                                     </p>
                                  </div>
                                  <button onClick={() => handleOpenDetailModal(res)} className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-sm font-semibold">
-                                    Převzít vozidlo
+                                    Detail
                                 </button>
                                </li>
                            ))}
                         </ul>
                     ) : <p className="text-gray-500">Aktuálně nejsou žádná vozidla pronajata.</p>}
+                </div>
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                    <h2 className="text-xl font-bold text-gray-700 mb-4">Přehled na 3 dny</h2>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                        {threeDayOutlook.map(d => (
+                            <div key={d.day} className="bg-gray-50 p-3 rounded-md">
+                                <p className="font-bold text-gray-800">{d.day}</p>
+                                <div className="mt-2 space-y-1">
+                                    <div className="flex items-center justify-center text-sm text-green-700 font-medium" title={`${d.departures} Odjezdů`}>
+                                        <ArrowUpCircle className="w-5 h-5 mr-1 flex-shrink-0" />
+                                        <span>{d.departures}</span>
+                                    </div>
+                                    <div className="flex items-center justify-center text-sm text-yellow-700 font-medium" title={`${d.arrivals} Příjezdů`}>
+                                        <ArrowDownCircle className="w-5 h-5 mr-1 flex-shrink-0" />
+                                        <span>{d.arrivals}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
         </div>
