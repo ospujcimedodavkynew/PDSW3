@@ -32,13 +32,13 @@ const VehicleCard: React.FC<{
                 <p className="text-gray-600">{vehicle.licensePlate} &bull; {vehicle.year}</p>
                 <p className="text-sm text-gray-500 mt-1">{vehicle.currentMileage.toLocaleString('cs-CZ')} km</p>
                 
-                <div className="mt-4 pt-4 border-t flex-grow">
+                <div className="mt-4 pt-4 border-t">
                     <p className="text-sm">4h: <span className="font-bold">{vehicle.rate4h} Kč</span></p>
                     <p className="text-sm">12h: <span className="font-bold">{vehicle.rate12h} Kč</span></p>
                     <p className="text-sm">Den: <span className="font-bold">{vehicle.dailyRate} Kč</span></p>
                 </div>
                 
-                 <div className="mt-4 flex space-x-2">
+                 <div className="mt-auto pt-4 border-t flex space-x-2">
                     <button onClick={() => onEdit(vehicle)} className="flex-1 bg-gray-100 text-gray-800 text-sm py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center">
                         <Edit className="w-4 h-4 mr-2" /> Upravit
                     </button>
