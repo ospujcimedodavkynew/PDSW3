@@ -168,7 +168,7 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                     <h2 className="text-2xl font-bold">
                         {isDeparture && 'Potvrzení o vydání vozidla'}
                         {isArrival && 'Protokol o vrácení vozidla'}
-                        {reservation.status === 'completed' && 'Detail dokončené rezervace'}
+                        {!isDeparture && !isArrival && 'Detail rezervace'}
                     </h2>
                     <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-200"><X /></button>
                 </div>
@@ -259,26 +259,30 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                         </div>
                     )}
                 </div>
-                <div className="mt-6 flex justify-end items-center space-x-3">
-                    {isDeparture && (
-                        <button 
-                            onClick={handleDeleteReservation}
-                            disabled={isProcessing}
-                            className="py-2 px-4 rounded-lg bg-red-600 text-white font-semibold transition-colors hover:bg-red-700 disabled:bg-gray-400 mr-auto flex items-center"
-                        >
-                           <Trash2 className="w-4 h-4 mr-2" /> Zrušit rezervaci
-                        </button>
-                    )}
-                    <button onClick={onClose} className="py-2 px-4 rounded-lg bg-gray-200 hover:bg-gray-300">Zavřít</button>
-                    {(isDeparture || isArrival) && (
-                        <button
-                            onClick={handleAction}
-                            disabled={isProcessing || (isArrival && !customerAgreed)}
-                            className={`py-2 px-6 rounded-lg text-white font-semibold transition-colors ${isDeparture ? 'bg-green-500 hover:bg-green-600' : 'bg-primary hover:bg-primary-hover'} disabled:bg-gray-400 disabled:cursor-not-allowed`}
-                        >
-                            {isProcessing ? 'Zpracovávám...' : (isDeparture ? 'Potvrdit vydání' : 'Uložit protokol a dokončit')}
-                        </button>
-                    )}
+                <div className="mt-6 flex justify-between items-center">
+                    <div>
+                        {isDeparture && (
+                            <button 
+                                onClick={handleDeleteReservation}
+                                disabled={isProcessing}
+                                className="py-2 px-4 rounded-lg bg-red-600 text-white font-semibold transition-colors hover:bg-red-700 disabled:bg-gray-400 flex items-center"
+                            >
+                               <Trash2 className="w-4 h-4 mr-2" /> Zrušit rezervaci
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex items-center space-x-3">
+                        <button onClick={onClose} className="py-2 px-4 rounded-lg bg-gray-200 hover:bg-gray-300">Zavřít</button>
+                        {(isDeparture || isArrival) && (
+                            <button
+                                onClick={handleAction}
+                                disabled={isProcessing || (isArrival && !customerAgreed)}
+                                className={`py-2 px-6 rounded-lg text-white font-semibold transition-colors ${isDeparture ? 'bg-green-500 hover:bg-green-600' : 'bg-primary hover:bg-primary-hover'} disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                            >
+                                {isProcessing ? 'Zpracovávám...' : (isDeparture ? 'Potvrdit vydání' : 'Uložit protokol a dokončit')}
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

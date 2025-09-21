@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Reservation, Vehicle, Page, VehicleService } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { Car, Users, CalendarCheck, AlertTriangle, Link, ArrowRightLeft, Wrench, Phone, ArrowUpCircle, ArrowDownCircle, Bell, CalendarClock } from 'lucide-react';
+import { Car, Users, CalendarCheck, AlertTriangle, Link, ArrowRightLeft, Wrench, Phone, ArrowUpCircle, ArrowDownCircle, Bell, CalendarClock, Settings } from 'lucide-react';
 import ReservationDetailModal from '../components/ReservationDetailModal';
 import SelfServiceModal from '../components/SelfServiceModal';
 import ApprovalModal from '../components/ApprovalModal';
@@ -213,21 +213,31 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                                 <ul className="mt-2 space-y-3 divide-y divide-gray-100">
                                     {rentalsForDate.map(res => (
                                         <li key={res.id} className="pt-3">
-                                            <div className="flex items-center space-x-4">
-                                                <div className="font-bold text-lg w-20 text-center">
-                                                    {new Date(res.startDate).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}
-                                                </div>
-                                                <div className="flex-grow">
-                                                    <p className="font-semibold">{res.customer?.firstName} {res.customer?.lastName}</p>
-                                                    <div className="flex items-center text-sm text-gray-600 mt-1">
-                                                        <Car className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
-                                                        {res.vehicle?.name} (<span className="font-mono text-xs">{res.vehicle?.licensePlate}</span>)
+                                            <div className="flex items-center justify-between space-x-4">
+                                                <div className="flex items-center space-x-4 flex-grow">
+                                                    <div className="font-bold text-lg w-20 text-center flex-shrink-0">
+                                                        {new Date(res.startDate).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}
+                                                    </div>
+                                                    <div className="flex-grow">
+                                                        <p className="font-semibold">{res.customer?.firstName} {res.customer?.lastName}</p>
+                                                        <div className="flex items-center text-sm text-gray-600 mt-1">
+                                                            <Car className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
+                                                            {res.vehicle?.name} (<span className="font-mono text-xs">{res.vehicle?.licensePlate}</span>)
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <a href={`tel:${res.customer?.phone}`} className="flex items-center text-blue-600 hover:underline text-sm flex-shrink-0">
-                                                    <Phone className="w-4 h-4 mr-2" />
-                                                    {res.customer?.phone}
-                                                </a>
+                                                <div className="flex items-center space-x-4 flex-shrink-0">
+                                                    <a href={`tel:${res.customer?.phone}`} className="flex items-center text-blue-600 hover:underline text-sm">
+                                                        <Phone className="w-4 h-4 mr-2" />
+                                                        {res.customer?.phone}
+                                                    </a>
+                                                    <button
+                                                        onClick={() => handleOpenDetailModal(res)}
+                                                        className="bg-gray-200 text-dark-text font-semibold py-1 px-3 rounded-lg hover:bg-gray-300 transition-colors text-sm flex items-center"
+                                                    >
+                                                        <Settings className="w-4 h-4 mr-2" /> Spravovat
+                                                    </button>
+                                                </div>
                                             </div>
                                         </li>
                                     ))}
