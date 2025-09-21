@@ -145,6 +145,22 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
         }
     };
     
+    const handleDeleteReservation = async () => {
+        if (!reservation) return;
+        if (window.confirm("Opravdu chcete tuto rezervaci zrušit a trvale smazat? Tato akce je nevratná.")) {
+            setIsProcessing(true);
+            try {
+                await actions.rejectReservation(reservation.id);
+                onClose();
+            } catch (error) {
+                console.error("Failed to delete reservation:", error);
+                alert(`Došlo k chybě: ${error instanceof Error ? error.message : "Neznámá chyba"}`);
+            } finally {
+                setIsProcessing(false);
+            }
+        }
+    };
+    
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start z-50 py-10 overflow-y-auto">
             <div className="bg-white rounded-lg shadow-2xl p-8 w-full max-w-3xl">
@@ -243,8 +259,17 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                         </div>
                     )}
                 </div>
-                <div className="mt-6 flex justify-end space-x-3">
-                    <button onClick={onClose} className="py-2 px-4 rounded-lg bg-gray-200 hover:bg-gray-300">Zrušit</button>
+                <div className="mt-6 flex justify-end items-center space-x-3">
+                    {isDeparture && (
+                        <button 
+                            onClick={handleDeleteReservation}
+                            disabled={isProcessing}
+                            className="py-2 px-4 rounded-lg bg-red-600 text-white font-semibold transition-colors hover:bg-red-700 disabled:bg-gray-400 mr-auto flex items-center"
+                        >
+                           <Trash2 className="w-4 h-4 mr-2" /> Zrušit rezervaci
+                        </button>
+                    )}
+                    <button onClick={onClose} className="py-2 px-4 rounded-lg bg-gray-200 hover:bg-gray-300">Zavřít</button>
                     {(isDeparture || isArrival) && (
                         <button
                             onClick={handleAction}
