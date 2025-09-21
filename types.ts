@@ -5,6 +5,7 @@ export enum Page {
     VEHICLES = 'VEHICLES',
     CUSTOMERS = 'CUSTOMERS',
     CONTRACTS = 'CONTRACTS',
+    HANDOVER_PROTOCOLS = 'HANDOVER_PROTOCOLS',
     FINANCIALS = 'FINANCIALS',
     REPORTS = 'REPORTS',
 }
@@ -66,6 +67,21 @@ export interface Contract {
     customer?: Customer;
     vehicle?: Vehicle;
 }
+
+export interface HandoverProtocol {
+    id: string;
+    reservationId: string;
+    customerId: string;
+    vehicleId: string;
+    generatedAt: Date | string;
+    protocolText: string;
+    signatureUrl: string;
+    // Expanded properties
+    customer?: Customer;
+    vehicle?: Vehicle;
+    reservation?: Reservation;
+}
+
 
 export interface FinancialTransaction {
     id: string;

@@ -7,6 +7,7 @@ import Calendar from './pages/Calendar';
 import Vehicles from './pages/Vehicles';
 import Customers from './pages/Customers';
 import Contracts from './pages/Contracts';
+import HandoverProtocols from './pages/HandoverProtocols';
 import Financials from './pages/Financials';
 import Reports from './pages/Reports';
 import Login from './pages/Login';
@@ -47,6 +48,7 @@ const AppContent: React.FC = () => {
             case Page.VEHICLES: return <Vehicles />;
             case Page.CUSTOMERS: return <Customers />;
             case Page.CONTRACTS: return <Contracts />;
+            case Page.HANDOVER_PROTOCOLS: return <HandoverProtocols />;
             case Page.FINANCIALS: return <Financials />;
             case Page.REPORTS: return <Reports />;
             default: return <Dashboard setCurrentPage={setCurrentPage} />;

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Reservation, Vehicle, Page, VehicleService } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { Car, Users, CalendarCheck, AlertTriangle, Link, Clock, ArrowRightLeft, Wrench } from 'lucide-react';
+import { Car, Users, CalendarCheck, AlertTriangle, Link, ArrowRightLeft, Wrench, Phone, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import ReservationDetailModal from '../components/ReservationDetailModal';
 import SelfServiceModal from '../components/SelfServiceModal';
 import { useData } from '../contexts/DataContext';
@@ -151,34 +151,68 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                 <div className="bg-white p-6 rounded-lg shadow-md">
                      <h2 className="text-xl font-bold text-gray-700 mb-4">Dnešní aktivity</h2>
                      {todaysActivities.length > 0 ? (
-                        <ul className="space-y-3">
-                           {todaysActivities.map(res => (
-                               <li key={res.id} className={`flex justify-between items-center p-3 rounded-md ${res.type === 'departure' ? 'bg-green-50' : 'bg-yellow-50'}`}>
-                                 <div>
-                                    <p className="font-semibold">{res.customer?.firstName} {res.customer?.lastName}</p>
-                                    <p className="text-sm text-gray-500">{res.vehicle?.name} - <Clock className="inline w-3 h-3 mr-1"/>{res.time.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}</p>
-                                 </div>
-                                 {res.type === 'departure' ? (
-                                    <button
-                                        onClick={() => handleOpenDetailModal(res)}
-                                        disabled={res.vehicle?.status !== 'available'}
-                                        className={`px-3 py-1 rounded text-sm font-semibold text-white transition-colors ${
-                                            res.vehicle?.status === 'available'
-                                            ? 'bg-green-500 hover:bg-green-600'
-                                            : 'bg-gray-400 cursor-not-allowed'
-                                        }`}
-                                        title={res.vehicle?.status !== 'available' ? 'Vozidlo není k dispozici (je pronajaté nebo v servisu)' : 'Vydat vozidlo'}
-                                    >
-                                        {res.vehicle?.status === 'available' ? 'Vydat' : 'Blokováno'}
-                                    </button>
-                                 ) : (
-                                    <button onClick={() => handleOpenDetailModal(res)} className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 text-sm font-semibold">
-                                        Převzít
-                                    </button>
-                                 )}
-                               </li>
-                           ))}
-                        </ul>
+                        <div className="flow-root">
+                            <ul role="list" className="-mb-8">
+                                {todaysActivities.map((res, index) => (
+                                    <li key={res.id}>
+                                        <div className="relative pb-8">
+                                            {index !== todaysActivities.length - 1 ? (
+                                                <span className="absolute left-5 top-5 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true" />
+                                            ) : null}
+                                            <div className="relative flex space-x-4">
+                                                <div>
+                                                    <span className={`h-10 w-10 rounded-full flex items-center justify-center ring-8 ring-white ${res.type === 'departure' ? 'bg-green-500' : 'bg-yellow-500'}`}>
+                                                        {res.type === 'departure' ? 
+                                                            <ArrowUpCircle className="h-6 w-6 text-white" /> : 
+                                                            <ArrowDownCircle className="h-6 w-6 text-white" />}
+                                                    </span>
+                                                </div>
+                                                <div className="min-w-0 flex-1 pt-1.5">
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <p className="text-lg font-bold text-gray-800">
+                                                                {res.time.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}
+                                                            </p>
+                                                            <p className="font-semibold mt-1">{res.customer?.firstName} {res.customer?.lastName}</p>
+                                                            <div className="mt-2 space-y-1 text-sm text-gray-600">
+                                                                <p className="flex items-center">
+                                                                    <Car className="w-4 h-4 mr-2 flex-shrink-0 text-gray-400" />
+                                                                    {res.vehicle?.name} (<span className="font-mono text-xs">{res.vehicle?.licensePlate}</span>)
+                                                                </p>
+                                                                <a href={`tel:${res.customer?.phone}`} className="flex items-center text-blue-600 hover:underline">
+                                                                    <Phone className="w-4 h-4 mr-2 flex-shrink-0" />
+                                                                    {res.customer?.phone}
+                                                                </a>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex-shrink-0 ml-4 mt-1">
+                                                            {res.type === 'departure' ? (
+                                                                <button
+                                                                    onClick={() => handleOpenDetailModal(res)}
+                                                                    disabled={res.vehicle?.status !== 'available'}
+                                                                    className={`px-3 py-1 rounded text-sm font-semibold text-white transition-colors ${
+                                                                        res.vehicle?.status === 'available'
+                                                                        ? 'bg-green-500 hover:bg-green-600'
+                                                                        : 'bg-gray-400 cursor-not-allowed'
+                                                                    }`}
+                                                                    title={res.vehicle?.status !== 'available' ? 'Vozidlo není k dispozici (je pronajaté nebo v servisu)' : 'Vydat vozidlo'}
+                                                                >
+                                                                    {res.vehicle?.status === 'available' ? 'Vydat' : 'Blokováno'}
+                                                                </button>
+                                                            ) : (
+                                                                <button onClick={() => handleOpenDetailModal(res)} className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 text-sm font-semibold">
+                                                                    Převzít
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                      ) : <p className="text-gray-500">Dnes nejsou plánované žádné odjezdy ani příjezdy.</p>}
                 </div>
                 <div className="bg-white p-6 rounded-lg shadow-md">

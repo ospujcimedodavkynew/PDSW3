@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient';
 import { Session } from '@supabase/supabase-js';
-import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage } from '../types';
+import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage, HandoverProtocol } from '../types';
 
 // --- Mappers: Supabase (snake_case) <-> Application (camelCase) ---
 
@@ -116,6 +116,31 @@ const toContract = (c: Partial<Contract>) => {
     return payload;
 };
 
+const fromHandoverProtocol = (p: any): HandoverProtocol => p && ({
+    id: p.id,
+    reservationId: p.reservation_id,
+    customerId: p.customer_id,
+    vehicleId: p.vehicle_id,
+    generatedAt: p.generated_at,
+    protocolText: p.protocol_text,
+    signatureUrl: p.signature_url,
+});
+
+const toHandoverProtocol = (p: Partial<HandoverProtocol>) => {
+    const { reservationId, customerId, vehicleId, generatedAt, protocolText, signatureUrl, customer, vehicle, reservation, ...rest } = p;
+    const payload = {
+        ...rest,
+        reservation_id: reservationId,
+        customer_id: customerId,
+        vehicle_id: vehicleId,
+        generated_at: generatedAt,
+        protocol_text: protocolText,
+        signature_url: signatureUrl,
+    };
+    Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
+    return payload;
+};
+
 const fromFinancial = (f: any): FinancialTransaction => f && ({
     id: f.id,
     type: f.type,
@@ -200,11 +225,12 @@ export const onAuthStateChange = (callback: (session: Session | null) => void) =
 
 // --- Data Fetching (For Authenticated Admin) ---
 export const getAllData = async () => {
-    const [vehiclesRes, customersRes, reservationsRes, contractsRes, financialsRes, servicesRes] = await Promise.all([
+    const [vehiclesRes, customersRes, reservationsRes, contractsRes, protocolsRes, financialsRes, servicesRes] = await Promise.all([
         supabase.from('vehicles').select('*'),
         supabase.from('customers').select('*'),
         supabase.from('reservations').select('*'),
         supabase.from('contracts').select('*'),
+        supabase.from('handover_protocols').select('*'),
         supabase.from('financial_transactions').select('*'),
         supabase.from('vehicle_services').select('*'),
     ]);
@@ -214,6 +240,7 @@ export const getAllData = async () => {
     handleSupabaseError(customersRes, 'customers');
     handleSupabaseError(reservationsRes, 'reservations');
     handleSupabaseError(contractsRes, 'contracts');
+    handleSupabaseError(protocolsRes, 'handover_protocols');
     handleSupabaseError(financialsRes, 'financials');
     handleSupabaseError(servicesRes, 'services');
     
@@ -222,6 +249,7 @@ export const getAllData = async () => {
         customers: customersRes.data!.map(fromCustomer),
         reservations: reservationsRes.data!.map(fromReservation),
         contracts: contractsRes.data!.map(fromContract),
+        handoverProtocols: protocolsRes.data!.map(fromHandoverProtocol),
         financials: financialsRes.data!.map(fromFinancial),
         services: servicesRes.data!.map(fromService),
     };
@@ -262,7 +290,7 @@ export const getDamagesForVehicle = async (vehicleId: string): Promise<VehicleDa
 
 // --- Data Mutation ---
 
-const uploadFile = async (bucket: string, path: string, file: File): Promise<string> => {
+export const uploadFile = async (bucket: string, path: string, file: File): Promise<string> => {
     const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file);
     if (uploadError) throw new Error(`Failed to upload file: ${uploadError.message}`);
     const { data } = supabase.storage.from(bucket).getPublicUrl(path);
@@ -303,6 +331,11 @@ export const updateReservation = async (reservationId: string, updates: Partial<
 export const addContract = async (contractData: Omit<Contract, 'id'>): Promise<Contract> => {
     const { data, error } = await supabase.from('contracts').insert([toContract(contractData)]).select().single();
     return fromContract(handleSupabaseError({ data, error }, 'add contract'));
+};
+
+export const addHandoverProtocol = async (protocolData: Omit<HandoverProtocol, 'id'>): Promise<HandoverProtocol> => {
+    const { data, error } = await supabase.from('handover_protocols').insert([toHandoverProtocol(protocolData)]).select().single();
+    return fromHandoverProtocol(handleSupabaseError({ data, error }, 'add handover protocol'));
 };
 
 export const addFinancialTransaction = async (transactionData: Omit<FinancialTransaction, 'id'>): Promise<FinancialTransaction> => {
@@ -350,7 +383,32 @@ export const submitCustomerDetails = async (token: string, customerData: Omit<Cu
 };
 
 export const createOnlineReservation = async (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>): Promise<void> => {
-    const newCustomer = await addCustomer(customerData);
-    const reservationData: Omit<Reservation, 'id' | 'status'> = { customerId: newCustomer.id, vehicleId, startDate, endDate };
+    // Check if customer exists by email
+    const { data: existingCustomer, error: findError } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('email', customerData.email)
+        .single();
+
+    // Supabase returns an error with code 'PGRST116' when no rows are found for a .single() query.
+    // We should only throw an error if it's something other than that.
+    if (findError && findError.code !== 'PGRST116') {
+        throw handleSupabaseError({ error: findError, data: null }, 'find existing customer');
+    }
+
+    let customerId: string;
+
+    if (existingCustomer) {
+        // Customer exists: use their ID and update their details with the new ones.
+        customerId = existingCustomer.id;
+        await updateCustomer({ id: customerId, ...customerData });
+    } else {
+        // New customer: create them.
+        const newCustomer = await addCustomer(customerData);
+        customerId = newCustomer.id;
+    }
+
+    // Create the reservation with the correct customer ID.
+    const reservationData: Omit<Reservation, 'id' | 'status'> = { customerId, vehicleId, startDate, endDate };
     await addReservation(reservationData);
 };

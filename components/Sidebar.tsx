@@ -1,6 +1,6 @@
 import React from 'react';
 import { Page } from '../types';
-import { LayoutDashboard, Car, Users, FileText, DollarSign, LogOut, Calendar, ClipboardList, BarChart } from 'lucide-react';
+import { LayoutDashboard, Car, Users, FileText, DollarSign, LogOut, Calendar, ClipboardList, BarChart, ClipboardCheck } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 
 interface SidebarProps {
@@ -18,6 +18,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage }) => {
         { page: Page.VEHICLES, label: 'Vozový park', icon: Car },
         { page: Page.CUSTOMERS, label: 'Zákazníci', icon: Users },
         { page: Page.CONTRACTS, label: 'Smlouvy', icon: FileText },
+        { page: Page.HANDOVER_PROTOCOLS, label: 'Předávací protokoly', icon: ClipboardCheck },
         { page: Page.FINANCIALS, label: 'Finance', icon: DollarSign },
         { page: Page.REPORTS, label: 'Reporty', icon: BarChart },
     ];

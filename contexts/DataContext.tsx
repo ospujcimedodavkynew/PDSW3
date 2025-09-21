@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import * as api from '../services/api';
-import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage } from '../types';
+import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage, HandoverProtocol } from '../types';
 import { Session } from '@supabase/supabase-js';
 
 
@@ -9,8 +9,17 @@ interface AppData {
     customers: Customer[];
     reservations: Reservation[];
     contracts: Contract[];
+    handoverProtocols: HandoverProtocol[];
     financials: FinancialTransaction[];
     services: VehicleService[];
+}
+
+export interface ProtocolData {
+    notes: string;
+    fuelLevel: string;
+    cleanliness: string;
+    keysAndDocsOk: boolean;
+    signatureDataUrl: string;
 }
 
 interface DataContextActions {
@@ -22,7 +31,7 @@ interface DataContextActions {
     updateVehicle: (vehicleData: Vehicle) => Promise<void>;
     addReservation: (reservationData: Omit<Reservation, 'id' | 'status'>) => Promise<Reservation>;
     activateReservation: (reservationId: string, startMileage: number) => Promise<void>;
-    completeReservation: (reservationId: string, endMileage: number, notes: string) => Promise<void>;
+    completeReservation: (reservationId: string, endMileage: number, protocolData: ProtocolData) => Promise<void>;
     addContract: (contractData: Omit<Contract, 'id'>) => Promise<void>;
     addExpense: (expenseData: { description: string; amount: number; date: Date; }) => Promise<void>;
     addService: (serviceData: Omit<VehicleService, 'id'>) => Promise<void>;
@@ -48,9 +57,24 @@ export const useData = () => {
     return context;
 };
 
-const expandData = (data: AppData): AppData => {
+// Helper to convert dataURL to File object for uploading
+const dataURLtoFile = (dataurl: string, filename: string): File => {
+    let arr = dataurl.split(','),
+        mimeMatch = arr[0].match(/:(.*?);/),
+        mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream',
+        bstr = atob(arr[1]),
+        n = bstr.length,
+        u8arr = new Uint8Array(n);
+    while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new File([u8arr], filename, { type: mime });
+};
+
+const expandData = (data: Omit<AppData, 'handoverProtocols'> & { handoverProtocols: HandoverProtocol[] }): AppData => {
     const vehiclesById = new Map(data.vehicles.map(v => [v.id, v]));
     const customersById = new Map(data.customers.map(c => [c.id, c]));
+    const reservationsById = new Map(data.reservations.map(r => [r.id, r]));
 
     const reservations = data.reservations.map(r => ({
         ...r,
@@ -62,6 +86,13 @@ const expandData = (data: AppData): AppData => {
         ...c,
         customer: customersById.get(c.customerId),
         vehicle: vehiclesById.get(c.vehicleId),
+    }));
+
+    const handoverProtocols = data.handoverProtocols.map(p => ({
+        ...p,
+        customer: customersById.get(p.customerId),
+        vehicle: vehiclesById.get(p.vehicleId),
+        reservation: reservationsById.get(p.reservationId)
     }));
     
     const services = data.services.map(s => ({
@@ -75,13 +106,13 @@ const expandData = (data: AppData): AppData => {
     }));
 
 
-    return { ...data, reservations, contracts, services, financials };
+    return { ...data, reservations, contracts, handoverProtocols, services, financials };
 };
 
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [data, setData] = useState<AppData>({
-        vehicles: [], customers: [], reservations: [], contracts: [], financials: [], services: [],
+        vehicles: [], customers: [], reservations: [], contracts: [], handoverProtocols: [], financials: [], services: [],
     });
     const [session, setSession] = useState<Session | null>(null);
     const [authLoading, setAuthLoading] = useState(true);
@@ -93,7 +124,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setAuthLoading(false);
         });
 
-        // FIX: Correctly subscribe to auth changes and use the correct callback signature.
+        // FIX: The `api.onAuthStateChange` function returns the subscription directly,
+        // and its callback expects only the `session` argument. The destructuring
+        // and callback signature have been corrected.
         const subscription = api.onAuthStateChange((session) => {
             setSession(session);
         });
@@ -120,7 +153,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (session) {
             refreshData();
         } else {
-            setData({ vehicles: [], customers: [], reservations: [], contracts: [], financials: [], services: [] });
+            setData({ vehicles: [], customers: [], reservations: [], contracts: [], handoverProtocols: [], financials: [], services: [] });
             setDataLoading(false);
         }
     }, [session, refreshData]);
@@ -166,36 +199,91 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
             await refreshData();
         },
-        completeReservation: async (reservationId, endMileage, notes) => {
+        completeReservation: async (reservationId, endMileage, protocolData) => {
             const reservation = data.reservations.find(r => r.id === reservationId);
-            if (!reservation) throw new Error("Reservation not found");
+            if (!reservation || !reservation.vehicle || !reservation.customer) throw new Error("Reservation not found or is incomplete");
 
-            await api.updateReservation(reservationId, { status: 'completed', endMileage, notes });
-            if (reservation.vehicleId) {
-                 await api.updateVehicle({ ...reservation.vehicle!, status: 'available', currentMileage: endMileage });
-            }
-            if(!reservation.vehicle || !reservation.customer) throw new Error("Missing vehicle or customer on reservation");
+            // 1. Upload signature
+            const signatureFile = dataURLtoFile(protocolData.signatureDataUrl, `signature-${reservationId}-${Date.now()}.png`);
+            // Assuming a 'signatures' bucket exists in Supabase Storage with public access
+            const signatureUrl = await api.uploadFile('signatures', signatureFile.name, signatureFile);
+            
+            // 2. Calculate mileage details
+            const startKm = reservation.startMileage || 0;
+            const kmDriven = endMileage > startKm ? endMileage - startKm : 0;
+            const durationMs = new Date(reservation.endDate).getTime() - new Date(reservation.startDate).getTime();
+            const rentalDays = Math.max(1, Math.ceil(durationMs / (1000 * 60 * 60 * 24)));
+            const kmLimit = rentalDays * 300;
+            const kmOver = Math.max(0, kmDriven - kmLimit);
+            const extraCharge = kmOver * 3;
 
-            // Calculate price and add to financials
+            // 3. Generate protocol text
+            const protocolText = `
+PŘEDÁVACÍ PROTOKOL - VRÁCENÍ VOZIDLA
+=========================================
+Datum a čas: ${new Date().toLocaleString('cs-CZ')}
+Rezervace ID: ${reservation.id}
+Vozidlo: ${reservation.vehicle.name} (${reservation.vehicle.licensePlate})
+Zákazník: ${reservation.customer.firstName} ${reservation.customer.lastName}
+
+--- KONTROLA STAVU VOZIDLA ---
+Stav paliva: ${protocolData.fuelLevel}
+Čistota: ${protocolData.cleanliness}
+Klíče a dokumentace: ${protocolData.keysAndDocsOk ? 'V pořádku' : 'Chybí / Nekompletní'}
+
+--- PŘEHLED KILOMETRŮ ---
+Počáteční stav: ${startKm.toLocaleString('cs-CZ')} km
+Konečný stav: ${endMileage.toLocaleString('cs-CZ')} km
+Ujeto celkem: ${kmDriven.toLocaleString('cs-CZ')} km
+Limit nájezdu (${rentalDays} dní): ${kmLimit.toLocaleString('cs-CZ')} km
+Překročeno o: ${kmOver.toLocaleString('cs-CZ')} km
+Poplatek za překročení: ${extraCharge.toLocaleString('cs-CZ')} Kč
+
+--- POZNÁMKY OBSLUHY ---
+${protocolData.notes || 'Žádné.'}
+---------------------------------
+Nová poškození nahlášená při tomto vrácení jsou zaznamenána samostatně v historii poškození vozidla.
+
+--- POTVRZENÍ ZÁKAZNÍKA ---
+Zákazník svým podpisem stvrzuje, že souhlasí s výše uvedeným stavem vozidla a vyúčtováním.
+`.trim();
+
+            // 4. Create handover protocol
+            await api.addHandoverProtocol({
+                reservationId: reservation.id,
+                customerId: reservation.customerId,
+                vehicleId: reservation.vehicleId,
+                generatedAt: new Date(),
+                protocolText,
+                signatureUrl
+            });
+
+            // 5. Update reservation and vehicle
+            await api.updateReservation(reservationId, { status: 'completed', endMileage, notes: protocolData.notes });
+            await api.updateVehicle({ ...reservation.vehicle, status: 'available', currentMileage: endMileage });
+
+            // 6. Add financial transaction for rental price + extra charges
             const start = new Date(reservation.startDate);
             const end = new Date(reservation.endDate);
             const durationHours = (end.getTime() - start.getTime()) / (1000 * 3600);
-            let totalPrice = 0;
-            if (durationHours <= 4) totalPrice = reservation.vehicle.rate4h;
-            else if (durationHours <= 12) totalPrice = reservation.vehicle.rate12h;
+            let rentalPrice = 0;
+            if (durationHours <= 4) rentalPrice = reservation.vehicle.rate4h;
+            else if (durationHours <= 12) rentalPrice = reservation.vehicle.rate12h;
             else {
                 const days = Math.ceil(durationHours / 24);
-                totalPrice = days * reservation.vehicle.dailyRate;
+                rentalPrice = days * reservation.vehicle.dailyRate;
             }
-             
+            const totalPrice = rentalPrice + extraCharge;
+
             await api.addFinancialTransaction({
                 type: 'income',
                 amount: totalPrice,
                 date: new Date(),
-                description: `Pronájem ${reservation.vehicle?.name} - ${reservation.customer?.firstName} ${reservation.customer?.lastName}`,
+                description: `Pronájem ${reservation.vehicle?.name} - ${reservation.customer?.firstName} ${reservation.customer?.lastName} (vč. poplatků)`,
                 reservationId,
             });
 
+            // 7. Refresh all data
             await refreshData();
         },
         addContract: async (contractData) => {
