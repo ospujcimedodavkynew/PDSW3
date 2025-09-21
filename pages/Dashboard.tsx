@@ -77,6 +77,34 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
     if (loading && vehicles.length === 0) return <div>Načítání přehledu...</div>;
     
     const hasAlerts = maintenanceVehicles.length > 0 || serviceAlerts.length > 0;
+    
+    const getReturnStatus = (endDate: Date | string) => {
+        const now = new Date();
+        const end = new Date(endDate);
+        const diffHours = (end.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+        if (diffHours < 0) {
+            const lateHours = Math.abs(diffHours);
+            const lateDays = Math.floor(lateHours / 24);
+            const remainingHours = Math.floor(lateHours % 24);
+            let text = 'Zpožděno o ';
+            if (lateDays > 0) text += `${lateDays} d. `;
+            if (remainingHours > 0) text += `${remainingHours} hod.`;
+            return { text: text.trim(), color: 'red' };
+        } else if (diffHours <= 24) {
+            return { text: `Vrací se dnes (zbývá ${Math.round(diffHours)} hodin)`, color: 'yellow' };
+        } else {
+            const diffDays = Math.ceil(diffHours / 24);
+            const daysText = diffDays === 1 ? 'den' : (diffDays > 1 && diffDays < 5) ? 'dny' : 'dní';
+            return { text: `Vrací se za ${diffDays} ${daysText}`, color: 'green' };
+        }
+    };
+
+    const statusColors: { [key: string]: string } = {
+        red: 'bg-red-100 text-red-800',
+        yellow: 'bg-yellow-100 text-yellow-800',
+        green: 'bg-green-100 text-green-800',
+    };
 
     return (
         <div className="space-y-6">
@@ -220,20 +248,33 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                         <ArrowRightLeft className="mr-2 text-blue-600" /> Právě probíhající pronájmy
                     </h2>
                      {activeRentals.length > 0 ? (
-                        <ul className="space-y-3">
-                           {activeRentals.map(res => (
-                               <li key={res.id} className="flex justify-between items-center p-3 rounded-md bg-blue-50">
-                                 <div>
-                                    <p className="font-semibold">{res.customer?.firstName} {res.customer?.lastName}</p>
-                                    <p className="text-sm text-gray-500">
-                                        {res.vehicle?.name} | Plánovaný návrat: {new Date(res.endDate).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' })} v {new Date(res.endDate).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}
-                                    </p>
-                                 </div>
-                                 <button onClick={() => handleOpenDetailModal(res)} className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-sm font-semibold">
-                                    Převzít vozidlo
-                                </button>
-                               </li>
-                           ))}
+                        <ul className="space-y-4">
+                           {activeRentals.map(res => {
+                               const status = getReturnStatus(res.endDate);
+                               return (
+                                   <li key={res.id} className="bg-white p-4 rounded-lg shadow border border-gray-200 space-y-3">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="font-bold text-lg text-gray-800">{res.customer?.firstName} {res.customer?.lastName}</p>
+                                                <a href={`tel:${res.customer?.phone}`} className="flex items-center text-blue-600 hover:underline text-sm mt-1">
+                                                    <Phone className="w-4 h-4 mr-2" />
+                                                    {res.customer?.phone}
+                                                </a>
+                                                <p className="text-sm text-gray-600 mt-2 flex items-center">
+                                                    <Car className="w-4 h-4 mr-2 text-gray-400" />
+                                                    {res.vehicle?.name} <span className="font-mono text-xs ml-2 bg-gray-200 px-1 rounded">{res.vehicle?.licensePlate}</span>
+                                                </p>
+                                            </div>
+                                            <button onClick={() => handleOpenDetailModal(res)} className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-sm font-semibold whitespace-nowrap">
+                                                Převzít vozidlo
+                                            </button>
+                                        </div>
+                                        <div className={`text-sm font-semibold p-2 rounded-md text-center ${statusColors[status.color]}`}>
+                                            {status.text}
+                                        </div>
+                                   </li>
+                               )
+                           })}
                         </ul>
                     ) : <p className="text-gray-500">Aktuálně nejsou žádná vozidla pronajata.</p>}
                 </div>
