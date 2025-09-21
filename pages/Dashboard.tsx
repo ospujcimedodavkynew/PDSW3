@@ -81,24 +81,46 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
     const getReturnStatus = (endDate: Date | string) => {
         const now = new Date();
         const end = new Date(endDate);
-        const diffHours = (end.getTime() - now.getTime()) / (1000 * 60 * 60);
 
-        if (diffHours < 0) {
-            const lateHours = Math.abs(diffHours);
-            const lateDays = Math.floor(lateHours / 24);
-            const remainingHours = Math.floor(lateHours % 24);
-            let text = 'Zpožděno o ';
-            if (lateDays > 0) text += `${lateDays} d. `;
-            if (remainingHours > 0) text += `${remainingHours} hod.`;
-            return { text: text.trim(), color: 'red' };
-        } else if (diffHours <= 24) {
-            return { text: `Vrací se dnes (zbývá ${Math.round(diffHours)} hodin)`, color: 'yellow' };
-        } else {
-            const diffDays = Math.ceil(diffHours / 24);
-            const daysText = diffDays === 1 ? 'den' : (diffDays > 1 && diffDays < 5) ? 'dny' : 'dní';
-            return { text: `Vrací se za ${diffDays} ${daysText}`, color: 'green' };
+        // 1. Check if overdue
+        if (end < now) {
+            const lateHours = (now.getTime() - end.getTime()) / (1000 * 60 * 60);
+            if (lateHours < 24) {
+                 return { text: `Zpožděno o ${Math.round(lateHours)} hod.`, color: 'red' };
+            } else {
+                 const lateDays = Math.floor(lateHours / 24);
+                 return { text: `Zpožděno o ${lateDays} d.`, color: 'red' };
+            }
         }
+
+        // 2. Prepare dates for calendar day comparison
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        
+        const tomorrowStart = new Date(todayStart);
+        tomorrowStart.setDate(todayStart.getDate() + 1);
+
+        const dayAfterTomorrowStart = new Date(tomorrowStart);
+        dayAfterTomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
+        // 3. Check if returning today
+        if (end >= todayStart && end < tomorrowStart) {
+            const diffHours = (end.getTime() - now.getTime()) / (1000 * 60 * 60);
+            return { text: `Vrací se dnes (zbývá ${Math.max(0, Math.round(diffHours))} hodin)`, color: 'yellow' };
+        }
+        
+        // 4. Check if returning tomorrow
+        if (end >= tomorrowStart && end < dayAfterTomorrowStart) {
+            const time = end.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+            return { text: `Vrací se zítra (v ${time})`, color: 'green' };
+        }
+        
+        // 5. Otherwise, it's returning later
+        const diffDays = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        const daysText = diffDays === 1 ? 'den' : (diffDays > 1 && diffDays < 5) ? 'dny' : 'dní';
+        return { text: `Vrací se za ${diffDays} ${daysText}`, color: 'green' };
     };
+
 
     const statusColors: { [key: string]: string } = {
         red: 'bg-red-100 text-red-800',
