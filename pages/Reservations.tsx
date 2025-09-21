@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Reservation, Vehicle, Customer } from '../types';
-import { UserPlus, Car, Calendar as CalendarIcon, Signature, Edit } from 'lucide-react';
+import { UserPlus, Car, Calendar as CalendarIcon, Signature, Edit, Search } from 'lucide-react';
 import SignatureModal from '../components/SignatureModal';
 import { useData } from '../contexts/DataContext';
 
@@ -40,11 +40,9 @@ const Reservations: React.FC = () => {
     const { data, loading, actions } = useData();
     const { vehicles, customers, reservations } = data;
     
-    // Form states managed as a single object for easy saving
     const [formData, setFormData] = useState<ReservationFormData>(loadDraft);
     const { selectedCustomerId, isNewCustomer, newCustomerData, selectedVehicleId, startDate, endDate } = formData;
     
-    // Save form data to session storage on every change
     useEffect(() => {
         sessionStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
     }, [formData]);
@@ -52,8 +50,17 @@ const Reservations: React.FC = () => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
     const [signatureDataUrl, setSignatureDataUrl] = useState<string>('');
+    const [customerSearchTerm, setCustomerSearchTerm] = useState('');
     
-    // Memoized calculations for performance
+    const filteredCustomers = useMemo(() => {
+        if (!customerSearchTerm) return customers;
+        const lowercasedTerm = customerSearchTerm.toLowerCase();
+        return customers.filter(c =>
+            `${c.firstName} ${c.lastName}`.toLowerCase().includes(lowercasedTerm) ||
+            c.email.toLowerCase().includes(lowercasedTerm)
+        );
+    }, [customers, customerSearchTerm]);
+
     const selectedCustomer = useMemo(() => customers.find(c => c.id === selectedCustomerId), [customers, selectedCustomerId]);
     const selectedVehicle = useMemo(() => vehicles.find(v => v.id === selectedVehicleId), [vehicles, selectedVehicleId]);
     
@@ -76,13 +83,11 @@ const Reservations: React.FC = () => {
         return vehicles.filter(v => v.status !== 'maintenance' && !conflictingVehicleIds.has(v.id));
     }, [vehicles, reservations, startDate, endDate]);
 
-    // This effect ensures that if the selected vehicle is no longer available, it gets deselected.
     useEffect(() => {
         if (selectedVehicleId && !availableVehicles.some(v => v.id === selectedVehicleId)) {
             setFormData(prev => ({ ...prev, selectedVehicleId: '' }));
         }
     }, [availableVehicles, selectedVehicleId]);
-
 
     const totalPrice = useMemo(() => {
         if (!selectedVehicle || !startDate || !endDate) return 0;
@@ -98,7 +103,6 @@ const Reservations: React.FC = () => {
         return days * selectedVehicle.dailyRate;
     }, [selectedVehicle, startDate, endDate]);
 
-    // Handlers
     const handleSetDuration = (hours: number) => {
         if (!startDate) {
             alert("Nejprve prosím vyberte počáteční datum a čas.");
@@ -120,13 +124,13 @@ const Reservations: React.FC = () => {
     const resetForm = useCallback(() => {
         setFormData(initialFormData);
         setSignatureDataUrl('');
+        setCustomerSearchTerm('');
         sessionStorage.removeItem(DRAFT_KEY);
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        // Validation
         if (!isNewCustomer && !selectedCustomerId) { alert("Vyberte prosím zákazníka."); return; }
         if (isNewCustomer && (!newCustomerData.firstName || !newCustomerData.lastName || !newCustomerData.email || !newCustomerData.address)) { alert("Vyplňte prosím údaje o novém zákazníkovi."); return; }
         if (!selectedVehicleId) { alert("Vyberte prosím vozidlo."); return; }
@@ -262,7 +266,11 @@ Digitální podpis nájemce:
     };
     
     const handleToggleNewCustomer = () => {
-        setFormData(prev => ({...prev, isNewCustomer: !prev.isNewCustomer, selectedCustomerId: ''}));
+        const willBeNew = !formData.isNewCustomer;
+        setFormData(prev => ({...prev, isNewCustomer: willBeNew, selectedCustomerId: ''}));
+        if (willBeNew) {
+            setCustomerSearchTerm('');
+        }
     };
     
     const handleSelectCustomer = (customerId: string) => {
@@ -285,15 +293,28 @@ Digitální podpis nájemce:
                     <section>
                         <h2 className="text-xl font-semibold text-gray-700 flex items-center mb-4"><UserPlus className="mr-2"/>1. Zákazník</h2>
                         <div className="flex items-center space-x-4">
-                            <select
-                                value={selectedCustomerId}
-                                onChange={(e) => handleSelectCustomer(e.target.value)}
-                                className="w-full p-2 border rounded-md"
-                                disabled={isNewCustomer}
-                            >
-                                <option value="">Vyberte stávajícího zákazníka</option>
-                                {customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName} ({c.email})</option>)}
-                            </select>
+                            <div className="flex-grow space-y-2">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Hledat stávajícího zákazníka..."
+                                        value={customerSearchTerm}
+                                        onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                                        className="w-full p-2 pl-10 border rounded-md"
+                                        disabled={isNewCustomer}
+                                    />
+                                </div>
+                                <select
+                                    value={selectedCustomerId}
+                                    onChange={(e) => handleSelectCustomer(e.target.value)}
+                                    className="w-full p-2 border rounded-md"
+                                    disabled={isNewCustomer}
+                                >
+                                    <option value="">{filteredCustomers.length > 0 ? 'Vyberte stávajícího zákazníka' : 'Žádný zákazník neodpovídá hledání'}</option>
+                                    {filteredCustomers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName} ({c.email})</option>)}
+                                </select>
+                            </div>
                             <span className="text-gray-500">nebo</span>
                              <button type="button" onClick={handleToggleNewCustomer} className={`py-2 px-4 rounded-md font-semibold whitespace-nowrap ${isNewCustomer ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>
                                 Nový zákazník
