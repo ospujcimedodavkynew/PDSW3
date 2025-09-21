@@ -75,7 +75,7 @@ export interface HandoverProtocol {
     vehicleId: string;
     generatedAt: Date | string;
     protocolText: string;
-    signatureUrl: string;
+    signatureUrl?: string;
     // Expanded properties
     customer?: Customer;
     vehicle?: Vehicle;
