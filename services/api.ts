@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { Session } from '@supabase/supabase-js';
+import { Session, RealtimeChannel } from '@supabase/supabase-js';
 import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage, HandoverProtocol } from '../types';
 
 // --- Mappers: Supabase (snake_case) <-> Application (camelCase) ---
@@ -221,6 +221,25 @@ export const getSession = async () => await supabase.auth.getSession();
 export const onAuthStateChange = (callback: (session: Session | null) => void) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => callback(session));
     return subscription;
+};
+
+// --- Real-time Subscriptions ---
+export const onNewReservation = (callback: () => void): RealtimeChannel => {
+    const channel = supabase
+        .channel('public:reservations')
+        .on(
+            'postgres_changes',
+            { event: 'INSERT', schema: 'public', table: 'reservations' },
+            () => {
+                callback();
+            }
+        )
+        .subscribe();
+    return channel;
+};
+
+export const removeChannel = (channel: RealtimeChannel) => {
+    supabase.removeChannel(channel);
 };
 
 // --- Data Fetching (For Authenticated Admin) ---

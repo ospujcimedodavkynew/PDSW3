@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import * as api from '../services/api';
 import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage, HandoverProtocol } from '../types';
-import { Session } from '@supabase/supabase-js';
+import { Session, RealtimeChannel } from '@supabase/supabase-js';
 
 
 interface AppData {
@@ -135,12 +135,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     useEffect(() => {
+        let reservationListener: RealtimeChannel | null = null;
+
         if (session) {
             refreshData();
+            
+            // Set up real-time listener for new reservations
+            reservationListener = api.onNewReservation(() => {
+                refreshData();
+            });
+
         } else {
             setData({ vehicles: [], customers: [], reservations: [], contracts: [], handoverProtocols: [], financials: [], services: [] });
             setDataLoading(false);
         }
+
+        // Cleanup listener on component unmount or session change
+        return () => {
+            if (reservationListener) {
+                api.removeChannel(reservationListener);
+            }
+        };
     }, [session, refreshData]);
 
     const actions = useMemo((): DataContextActions => ({
@@ -390,7 +405,7 @@ Zákazník digitálně odsouhlasil obsah tohoto protokolu dne ${new Date().toLoc
         },
         createOnlineReservation: async (vehicleId, startDate, endDate, customerData) => {
             await api.createOnlineReservation(vehicleId, startDate, endDate, customerData);
-            await refreshData();
+            // No local refresh needed, realtime listener will trigger it.
         }
     }), [data, refreshData]);
 
