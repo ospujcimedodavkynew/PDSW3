@@ -1,22 +1,55 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Reservation, Vehicle, Customer } from '../types';
 import { UserPlus, Car, Calendar as CalendarIcon, Signature, Edit } from 'lucide-react';
 import SignatureModal from '../components/SignatureModal';
 import { useData } from '../contexts/DataContext';
 
+interface ReservationFormData {
+    selectedCustomerId: string;
+    isNewCustomer: boolean;
+    newCustomerData: Omit<Customer, 'id'>;
+    selectedVehicleId: string;
+    startDate: string;
+    endDate: string;
+}
+
+const DRAFT_KEY = 'reservationFormDraft';
+
+const initialFormData: ReservationFormData = {
+    selectedCustomerId: '',
+    isNewCustomer: false,
+    newCustomerData: { firstName: '', lastName: '', email: '', phone: '', driverLicenseNumber: '', address: '' },
+    selectedVehicleId: '',
+    startDate: '',
+    endDate: '',
+};
+
+const loadDraft = (): ReservationFormData => {
+    try {
+        const draft = sessionStorage.getItem(DRAFT_KEY);
+        if (draft) {
+            return JSON.parse(draft);
+        }
+    } catch (error) {
+        console.error("Failed to parse reservation draft:", error);
+    }
+    return initialFormData;
+};
+
 const Reservations: React.FC = () => {
     const { data, loading, actions } = useData();
     const { vehicles, customers, reservations } = data;
     
-    // Form states
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
-    const [isNewCustomer, setIsNewCustomer] = useState(false);
-    const [newCustomerData, setNewCustomerData] = useState<Omit<Customer, 'id'>>({ firstName: '', lastName: '', email: '', phone: '', driverLicenseNumber: '', address: '' });
-    const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
+    // Form states managed as a single object for easy saving
+    const [formData, setFormData] = useState<ReservationFormData>(loadDraft);
+    const { selectedCustomerId, isNewCustomer, newCustomerData, selectedVehicleId, startDate, endDate } = formData;
     
+    // Save form data to session storage on every change
+    useEffect(() => {
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
+    }, [formData]);
+    
+    const [isProcessing, setIsProcessing] = useState(false);
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
     const [signatureDataUrl, setSignatureDataUrl] = useState<string>('');
     
@@ -43,14 +76,10 @@ const Reservations: React.FC = () => {
         return vehicles.filter(v => v.status !== 'maintenance' && !conflictingVehicleIds.has(v.id));
     }, [vehicles, reservations, startDate, endDate]);
 
-    // ROBUST FIX: This effect ensures that if the selected vehicle is no longer
-    // in the list of available vehicles (due to a date change), it gets deselected automatically.
+    // This effect ensures that if the selected vehicle is no longer available, it gets deselected.
     useEffect(() => {
-        if (selectedVehicleId) {
-            const isSelectedStillAvailable = availableVehicles.some(v => v.id === selectedVehicleId);
-            if (!isSelectedStillAvailable) {
-                setSelectedVehicleId('');
-            }
+        if (selectedVehicleId && !availableVehicles.some(v => v.id === selectedVehicleId)) {
+            setFormData(prev => ({ ...prev, selectedVehicleId: '' }));
         }
     }, [availableVehicles, selectedVehicleId]);
 
@@ -80,13 +109,19 @@ const Reservations: React.FC = () => {
         
         const pad = (num: number) => num.toString().padStart(2, '0');
         const formattedEnd = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(end.getHours())}:${pad(end.getMinutes())}`;
-        setEndDate(formattedEnd);
+        setFormData(prev => ({ ...prev, endDate: formattedEnd }));
     };
 
     const handleSaveSignature = (dataUrl: string) => {
         setSignatureDataUrl(dataUrl);
         setIsSignatureModalOpen(false);
     };
+
+    const resetForm = useCallback(() => {
+        setFormData(initialFormData);
+        setSignatureDataUrl('');
+        sessionStorage.removeItem(DRAFT_KEY);
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -127,7 +162,6 @@ const Reservations: React.FC = () => {
             const contractVehicle = vehicles.find(v => v.id === selectedVehicleId);
             if (!contractVehicle) throw new Error("Vozidlo nebylo nalezeno.");
 
-            // Generate professional contract text
             const contractText = `
 SMLOUVA O NÁJMU DOPRAVNÍHO PROSTŘEDKU
 =========================================
@@ -211,14 +245,7 @@ Digitální podpis nájemce:
 
             alert("Rezervace byla úspěšně vytvořena a smlouva uložena! Nyní budete přesměrováni do emailového klienta pro odeslání smlouvy.");
             
-            // Reset form
-            setSelectedCustomerId('');
-            setIsNewCustomer(false);
-            setNewCustomerData({ firstName: '', lastName: '', email: '', phone: '', driverLicenseNumber: '', address: '' });
-            setSelectedVehicleId('');
-            setStartDate('');
-            setEndDate('');
-            setSignatureDataUrl('');
+            resetForm();
 
         } catch (error) {
             console.error("Failed to create reservation:", error);
@@ -229,6 +256,18 @@ Digitální podpis nájemce:
     };
     
     if (loading && customers.length === 0) return <div>Načítání...</div>;
+
+    const handleNewCustomerDataChange = (field: keyof Omit<Customer, 'id'>, value: string) => {
+        setFormData(prev => ({...prev, newCustomerData: {...prev.newCustomerData, [field]: value}}));
+    };
+    
+    const handleToggleNewCustomer = () => {
+        setFormData(prev => ({...prev, isNewCustomer: !prev.isNewCustomer, selectedCustomerId: ''}));
+    };
+    
+    const handleSelectCustomer = (customerId: string) => {
+        setFormData(prev => ({ ...prev, selectedCustomerId: customerId, isNewCustomer: false }));
+    };
 
     return (
         <>
@@ -248,7 +287,7 @@ Digitální podpis nájemce:
                         <div className="flex items-center space-x-4">
                             <select
                                 value={selectedCustomerId}
-                                onChange={(e) => { setSelectedCustomerId(e.target.value); setIsNewCustomer(false); }}
+                                onChange={(e) => handleSelectCustomer(e.target.value)}
                                 className="w-full p-2 border rounded-md"
                                 disabled={isNewCustomer}
                             >
@@ -256,21 +295,21 @@ Digitální podpis nájemce:
                                 {customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName} ({c.email})</option>)}
                             </select>
                             <span className="text-gray-500">nebo</span>
-                             <button type="button" onClick={() => { setIsNewCustomer(!isNewCustomer); setSelectedCustomerId(''); }} className={`py-2 px-4 rounded-md font-semibold whitespace-nowrap ${isNewCustomer ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>
+                             <button type="button" onClick={handleToggleNewCustomer} className={`py-2 px-4 rounded-md font-semibold whitespace-nowrap ${isNewCustomer ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>
                                 Nový zákazník
                             </button>
                         </div>
                         {isNewCustomer && (
                             <div className="mt-4 space-y-2 p-4 border-t">
                                 <div className="grid grid-cols-2 gap-4">
-                                    <input type="text" placeholder="Jméno" value={newCustomerData.firstName} onChange={e => setNewCustomerData({...newCustomerData, firstName: e.target.value})} className="w-full p-2 border rounded" required />
-                                    <input type="text" placeholder="Příjmení" value={newCustomerData.lastName} onChange={e => setNewCustomerData({...newCustomerData, lastName: e.target.value})} className="w-full p-2 border rounded" required />
+                                    <input type="text" placeholder="Jméno" value={newCustomerData.firstName} onChange={e => handleNewCustomerDataChange('firstName', e.target.value)} className="w-full p-2 border rounded" required />
+                                    <input type="text" placeholder="Příjmení" value={newCustomerData.lastName} onChange={e => handleNewCustomerDataChange('lastName', e.target.value)} className="w-full p-2 border rounded" required />
                                 </div>
-                                <input type="email" placeholder="Email" value={newCustomerData.email} onChange={e => setNewCustomerData({...newCustomerData, email: e.target.value})} className="w-full p-2 border rounded" required />
-                                <input type="text" placeholder="Adresa" value={newCustomerData.address} onChange={e => setNewCustomerData({...newCustomerData, address: e.target.value})} className="w-full p-2 border rounded" required />
+                                <input type="email" placeholder="Email" value={newCustomerData.email} onChange={e => handleNewCustomerDataChange('email', e.target.value)} className="w-full p-2 border rounded" required />
+                                <input type="text" placeholder="Adresa" value={newCustomerData.address} onChange={e => handleNewCustomerDataChange('address', e.target.value)} className="w-full p-2 border rounded" required />
                                 <div className="grid grid-cols-2 gap-4">
-                                     <input type="tel" placeholder="Telefon" value={newCustomerData.phone} onChange={e => setNewCustomerData({...newCustomerData, phone: e.target.value})} className="w-full p-2 border rounded" required />
-                                    <input type="text" placeholder="Číslo ŘP" value={newCustomerData.driverLicenseNumber} onChange={e => setNewCustomerData({...newCustomerData, driverLicenseNumber: e.target.value})} className="w-full p-2 border rounded" required />
+                                     <input type="tel" placeholder="Telefon" value={newCustomerData.phone} onChange={e => handleNewCustomerDataChange('phone', e.target.value)} className="w-full p-2 border rounded" required />
+                                    <input type="text" placeholder="Číslo ŘP" value={newCustomerData.driverLicenseNumber} onChange={e => handleNewCustomerDataChange('driverLicenseNumber', e.target.value)} className="w-full p-2 border rounded" required />
                                 </div>
                             </div>
                         )}
@@ -282,11 +321,11 @@ Digitální podpis nájemce:
                         <div className="grid grid-cols-2 gap-4 mb-3">
                             <div>
                                 <label className="block text-sm font-medium">Od (datum a čas)</label>
-                                <input type="datetime-local" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-2 border rounded" required />
+                                <input type="datetime-local" value={startDate} onChange={e => setFormData(prev => ({...prev, startDate: e.target.value}))} className="w-full p-2 border rounded" required />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium">Do (datum a čas)</label>
-                                <input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-2 border rounded" required />
+                                <input type="datetime-local" value={endDate} onChange={e => setFormData(prev => ({...prev, endDate: e.target.value}))} className="w-full p-2 border rounded" required />
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -310,7 +349,7 @@ Digitální podpis nájemce:
                         ) : (
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 {availableVehicles.length > 0 ? availableVehicles.map(v => (
-                                    <div key={v.id} onClick={() => setSelectedVehicleId(v.id)} className={`border-2 rounded-lg p-3 cursor-pointer transition-all ${selectedVehicleId === v.id ? 'border-primary shadow-lg scale-105' : 'border-gray-200 hover:border-blue-300'}`}>
+                                    <div key={v.id} onClick={() => setFormData(prev => ({...prev, selectedVehicleId: v.id}))} className={`border-2 rounded-lg p-3 cursor-pointer transition-all ${selectedVehicleId === v.id ? 'border-primary shadow-lg scale-105' : 'border-gray-200 hover:border-blue-300'}`}>
                                         <img src={v.imageUrl} alt={v.name} className="w-full h-24 object-cover rounded-md mb-2"/>
                                         <h3 className="font-semibold">{v.name}</h3>
                                         <p className="text-xs text-gray-500">{v.rate4h.toLocaleString('cs-CZ')} Kč/4h | {v.rate12h.toLocaleString('cs-CZ')} Kč/12h</p>
