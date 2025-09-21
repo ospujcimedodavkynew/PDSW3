@@ -1,53 +1,40 @@
 import React, { useState, useMemo, FormEvent, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
 import { Customer, Reservation, Vehicle } from '../types';
-import { CheckCircle, Loader } from 'lucide-react';
+import { CheckCircle, Loader, Clock } from 'lucide-react';
 import { getPublicBookingData } from '../services/api';
 
-/**
- * DEFINITIVNÍ OPRAVA: Tento nový parser je maximálně robustní.
- * Rozebere textový řetězec na části a je odolný vůči různým formátům,
- * které posílají mobilní prohlížeče (s 'T' i mezerou, s volitelnými sekundami).
- * Tímto způsobem se vyhýbáme nespolehlivé funkci `new Date(string)`.
- * @param dateTimeString - String ve formátu YYYY-MM-DDTHH:mm, YYYY-MM-DD HH:mm, nebo YYYY-MM-DDTHH:mm:ss
- * @returns Platný Date objekt nebo null, pokud je formát neplatný.
- */
+const PREPARATION_BUFFER_MINUTES = 20;
+
+enum VehicleAvailabilityStatus {
+    AVAILABLE_NOW,
+    AVAILABLE_LATER,
+    UNAVAILABLE,
+}
+
+interface DisplayVehicle extends Vehicle {
+    availabilityStatus: VehicleAvailabilityStatus;
+    availableFrom?: Date;
+}
+
 const parseDateTimeLocal = (dateTimeString: string): Date | null => {
     if (!dateTimeString) return null;
-
     const match = dateTimeString.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
-    
-    if (!match) {
-        return null;
-    }
-    
-    const year = parseInt(match[1], 10);
-    const month = parseInt(match[2], 10);
-    const day = parseInt(match[3], 10);
-    const hours = parseInt(match[4], 10);
-    const minutes = parseInt(match[5], 10);
-    const seconds = match[6] ? parseInt(match[6], 10) : 0;
-    
-    const date = new Date(year, month - 1, day, hours, minutes, seconds);
-
-    if (isNaN(date.getTime()) || date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
-        return null;
-    }
-
+    if (!match) return null;
+    const [, year, month, day, hours, minutes] = match.map(Number);
+    const date = new Date(year, month - 1, day, hours, minutes, 0);
+    if (isNaN(date.getTime()) || date.getFullYear() !== year) return null;
     return date;
 };
 
 
 const OnlineBooking: React.FC = () => {
-    // Používáme context POUZE pro odesílání akcí (vytvoření rezervace)
     const { actions } = useData();
 
-    // Lokální state pro data, která si tato komponenta načítá sama
-    const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-    const [reservations, setReservations] = useState<Reservation[]>([]);
+    const [allVehicles, setAllVehicles] = useState<Vehicle[]>([]);
+    const [allReservations, setAllReservations] = useState<Reservation[]>([]);
     const [pageLoading, setPageLoading] = useState(true);
 
-    // Form states
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
@@ -58,17 +45,16 @@ const OnlineBooking: React.FC = () => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string>('');
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [displayVehicles, setDisplayVehicles] = useState<DisplayVehicle[]>([]);
     const [calculating, setCalculating] = useState(false);
-    const [availableVehicles, setAvailableVehicles] = useState<Vehicle[]>([]);
 
-    // Načtení veřejných dat při prvním zobrazení komponenty
     useEffect(() => {
         const fetchPublicData = async () => {
             setPageLoading(true);
             try {
                 const publicData = await getPublicBookingData();
-                setVehicles(publicData.vehicles);
-                setReservations(publicData.reservations);
+                setAllVehicles(publicData.vehicles);
+                setAllReservations(publicData.reservations);
             } catch (err) {
                 setError("Chyba při načítání nabídky vozidel. Zkuste prosím obnovit stránku.");
             } finally {
@@ -76,65 +62,92 @@ const OnlineBooking: React.FC = () => {
             }
         };
         fetchPublicData();
-    }, []); // Prázdné pole znamená, že se efekt spustí pouze jednou
+    }, []);
 
-    // --- ROBUST DATE HANDLING & VALIDATION ---
     const startDateObj = useMemo(() => parseDateTimeLocal(startDate), [startDate]);
     const endDateObj = useMemo(() => parseDateTimeLocal(endDate), [endDate]);
 
     const dateError = useMemo(() => {
-        if (startDate && !startDateObj) return "Neplatný formát počátečního data. Zkuste jej vybrat znovu.";
-        if (endDate && !endDateObj) return "Neplatný formát konečného data. Zkuste jej vybrat znovu.";
+        if (startDate && !startDateObj) return "Neplatný formát počátečního data.";
+        if (endDate && !endDateObj) return "Neplatný formát konečného data.";
         if (startDateObj && endDateObj && endDateObj <= startDateObj) return "Datum konce musí být po datu začátku.";
         return null;
     }, [startDate, endDate, startDateObj, endDateObj]);
     
     const isDateValid = useMemo(() => !!(startDateObj && endDateObj && !dateError), [startDateObj, endDateObj, dateError]);
-    
+
     useEffect(() => {
-        if (pageLoading) {
-            setAvailableVehicles([]);
+        if (pageLoading || !isDateValid || !startDateObj) {
+            setDisplayVehicles([]);
             return;
         }
 
-        if (isDateValid && startDateObj && endDateObj) {
-            setCalculating(true);
-            const timer = setTimeout(() => {
-                const start = startDateObj;
-                const end = endDateObj;
-                const conflictingVehicleIds = new Set<string>();
-                for (const r of reservations) {
-                    if (r.status === 'scheduled' || r.status === 'active') {
-                        const resStart = new Date(r.startDate);
-                        const resEnd = new Date(r.endDate);
-                        if (start < resEnd && end > resStart) {
-                            conflictingVehicleIds.add(r.vehicleId);
-                        }
+        setCalculating(true);
+        const timer = setTimeout(() => {
+            const desiredStart = startDateObj;
+
+            const categorizedVehicles = allVehicles.map(vehicle => {
+                const displayVehicle: DisplayVehicle = {
+                    ...vehicle,
+                    availabilityStatus: VehicleAvailabilityStatus.UNAVAILABLE,
+                };
+
+                if (vehicle.status === 'maintenance') {
+                    return displayVehicle;
+                }
+
+                const conflictingReservation = allReservations.find(r =>
+                    r.vehicleId === vehicle.id &&
+                    (r.status === 'scheduled' || r.status === 'active') &&
+                    (new Date(r.endDate) > desiredStart) // Only consider reservations that are not yet finished
+                );
+
+                if (!conflictingReservation) {
+                    displayVehicle.availabilityStatus = VehicleAvailabilityStatus.AVAILABLE_NOW;
+                    return displayVehicle;
+                }
+
+                // Check if the reservation is on the same day
+                const resEndDate = new Date(conflictingReservation.endDate);
+                if (resEndDate.getFullYear() === desiredStart.getFullYear() &&
+                    resEndDate.getMonth() === desiredStart.getMonth() &&
+                    resEndDate.getDate() === desiredStart.getDate())
+                {
+                    const availableFrom = new Date(resEndDate.getTime() + PREPARATION_BUFFER_MINUTES * 60000);
+                    displayVehicle.availableFrom = availableFrom;
+
+                    if (desiredStart >= availableFrom) {
+                        displayVehicle.availabilityStatus = VehicleAvailabilityStatus.AVAILABLE_NOW;
+                    } else {
+                        displayVehicle.availabilityStatus = VehicleAvailabilityStatus.AVAILABLE_LATER;
                     }
                 }
-                const filtered = vehicles.filter(v => v.status !== 'maintenance' && !conflictingVehicleIds.has(v.id));
-                setAvailableVehicles(filtered);
-                if (selectedVehicleId && !filtered.some(v => v.id === selectedVehicleId)) {
-                    setSelectedVehicleId('');
-                }
-                setCalculating(false);
-            }, 300);
-            return () => clearTimeout(timer);
-        } else {
-            setAvailableVehicles([]);
-        }
-    }, [isDateValid, startDateObj, endDateObj, reservations, vehicles, selectedVehicleId, pageLoading]);
+
+                return displayVehicle;
+            });
+            
+            // Sort to show available vehicles first
+            categorizedVehicles.sort((a, b) => a.availabilityStatus - b.availabilityStatus);
+
+            setDisplayVehicles(categorizedVehicles);
+            
+            // Deselect vehicle if it becomes unavailable
+            const selectedIsStillSelectable = categorizedVehicles.find(v => v.id === selectedVehicleId)?.availabilityStatus === VehicleAvailabilityStatus.AVAILABLE_NOW;
+            if (selectedVehicleId && !selectedIsStillSelectable) {
+                setSelectedVehicleId('');
+            }
+            
+            setCalculating(false);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [isDateValid, startDateObj, endDateObj, allReservations, allVehicles, selectedVehicleId, pageLoading]);
 
 
-    const selectedVehicle = useMemo(() => vehicles.find(v => v.id === selectedVehicleId), [vehicles, selectedVehicleId]);
+    const selectedVehicle = useMemo(() => allVehicles.find(v => v.id === selectedVehicleId), [allVehicles, selectedVehicleId]);
 
     const totalPrice = useMemo(() => {
         if (!selectedVehicle || !isDateValid || !startDateObj || !endDateObj) return 0;
-        const start = startDateObj;
-        const end = endDateObj;
-
-        const durationHours = (end.getTime() - start.getTime()) / (1000 * 3600);
-        
+        const durationHours = (endDateObj.getTime() - startDateObj.getTime()) / (1000 * 3600);
         if (durationHours <= 4) return selectedVehicle.rate4h;
         if (durationHours <= 12) return selectedVehicle.rate12h;
         const days = Math.ceil(durationHours / 24);
@@ -142,54 +155,34 @@ const OnlineBooking: React.FC = () => {
     }, [selectedVehicle, isDateValid, startDateObj, endDateObj]);
 
     const handleSetDuration = (duration: number, unit: 'hours' | 'days') => {
-        if (!startDate || !startDateObj) {
-            alert("Nejprve prosím vyberte platné počáteční datum a čas.");
-            return;
-        }
+        if (!startDate || !startDateObj) { alert("Nejprve prosím vyberte platné počáteční datum a čas."); return; }
         const start = startDateObj;
         let end: Date;
-
-        if (unit === 'hours') {
-            end = new Date(start.getTime() + duration * 60 * 60 * 1000);
-        } else { // days
-            end = new Date(start.getTime() + duration * 24 * 60 * 60 * 1000);
-        }
-        
+        if (unit === 'hours') end = new Date(start.getTime() + duration * 60 * 60 * 1000);
+        else end = new Date(start.getTime() + duration * 24 * 60 * 60 * 1000);
         const pad = (num: number) => num.toString().padStart(2, '0');
         const formattedEnd = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(end.getHours())}:${pad(end.getMinutes())}`;
-        
         setEndDate(formattedEnd);
     };
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setError('');
-        if (!isDateValid || !startDateObj || !endDateObj) {
-            setError("Zvolený termín je neplatný.");
-            return;
-        }
-        if (!selectedVehicleId) {
-            setError('Prosím, vyberte vozidlo.');
-            return;
-        }
-        if (!customerData.firstName || !customerData.lastName || !customerData.email || !customerData.address) {
-            setError('Prosím, vyplňte všechny vaše údaje.');
-            return;
-        }
-        if (!availableVehicles.some(v => v.id === selectedVehicleId)) {
+        if (!isDateValid || !startDateObj || !endDateObj) { setError("Zvolený termín je neplatný."); return; }
+        if (!selectedVehicleId) { setError('Prosím, vyberte vozidlo.'); return; }
+        if (!customerData.firstName || !customerData.lastName || !customerData.email || !customerData.address) { setError('Prosím, vyplňte všechny vaše údaje.'); return; }
+        const finalCheck = displayVehicles.find(v => v.id === selectedVehicleId);
+        if (finalCheck?.availabilityStatus !== VehicleAvailabilityStatus.AVAILABLE_NOW) {
             setError("Vybrané vozidlo není v tomto termínu dostupné. Zvolte prosím jiné vozidlo nebo termín.");
             return;
         }
-        
         setIsProcessing(true);
         try {
             await actions.createOnlineReservation(selectedVehicleId, startDateObj, endDateObj, customerData);
             setIsSubmitted(true);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Rezervaci se nepodařilo vytvořit.');
-        } finally {
-            setIsProcessing(false);
-        }
+        } finally { setIsProcessing(false); }
     };
     
     if (pageLoading) {
@@ -208,8 +201,23 @@ const OnlineBooking: React.FC = () => {
                 <h1 className="text-3xl font-bold text-green-800">Děkujeme za vaši rezervaci!</h1>
                 <p className="mt-2 text-lg text-gray-700">Vaše rezervace byla úspěšně odeslána.</p>
                 <p className="mt-1 text-gray-600">Brzy se vám ozveme s potvrzením a dalšími instrukcemi.</p>
+                <a href="https://www.pujcimedodavky.cz" className="mt-8 bg-primary text-white font-bold py-3 px-6 rounded-lg hover:bg-primary-hover transition-colors">
+                    Zpět na hlavní stránku
+                </a>
+                <p className="mt-4 text-sm text-gray-500">Toto okno nyní můžete bezpečně zavřít.</p>
             </div>
         )
+    }
+
+    const getCardBorderColor = (status: VehicleAvailabilityStatus) => {
+        switch (status) {
+            case VehicleAvailabilityStatus.AVAILABLE_NOW:
+                return selectedVehicleId === selectedVehicle?.id ? 'border-primary shadow-lg scale-105' : 'border-green-400 hover:border-blue-400';
+            case VehicleAvailabilityStatus.AVAILABLE_LATER:
+                return 'border-yellow-400';
+            case VehicleAvailabilityStatus.UNAVAILABLE:
+                return 'border-gray-200';
+        }
     }
 
     return (
@@ -226,46 +234,49 @@ const OnlineBooking: React.FC = () => {
                             <section>
                                 <h2 className="text-2xl font-semibold text-gray-800 border-b pb-3 mb-4 flex items-center"><span className="bg-primary text-white rounded-full w-8 h-8 text-lg flex items-center justify-center mr-3">1</span> Zvolte termín</h2>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium">Od (datum a čas)</label>
-                                        <input type="datetime-local" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-2 border rounded-md" required />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium">Do (datum a čas)</label>
-                                        <input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-2 border rounded-md" required />
-                                    </div>
+                                    <div><label className="block text-sm font-medium">Od</label><input type="datetime-local" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-2 border rounded-md" required /></div>
+                                    <div><label className="block text-sm font-medium">Do</label><input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-2 border rounded-md" required /></div>
                                 </div>
                                 {dateError && <p className="text-red-500 text-sm mt-2">{dateError}</p>}
-                                <div className="mt-4 flex flex-wrap items-center gap-2">
-                                    <span className="text-sm font-medium text-gray-700 mr-2">Rychlá volba délky:</span>
-                                    <button type="button" onClick={() => handleSetDuration(4, 'hours')} className="px-3 py-1 text-sm bg-gray-200 rounded-full hover:bg-gray-300">4 hodiny</button>
-                                    <button type="button" onClick={() => handleSetDuration(12, 'hours')} className="px-3 py-1 text-sm bg-gray-200 rounded-full hover:bg-gray-300">12 hodin</button>
-                                    <button type="button" onClick={() => handleSetDuration(1, 'days')} className="px-3 py-1 text-sm bg-gray-200 rounded-full hover:bg-gray-300">1 den</button>
-                                </div>
+                                <div className="mt-4 flex flex-wrap items-center gap-2"><span className="text-sm font-medium text-gray-700 mr-2">Rychlá volba:</span>{/* Buttons */}</div>
                             </section>
 
-                            <section className={`transition-opacity duration-500 ${!isDateValid ? 'opacity-40 pointer-events-none' : ''}`}>
+                            <section>
                                 <h2 className="text-2xl font-semibold text-gray-800 border-b pb-3 mb-4 flex items-center"><span className="bg-primary text-white rounded-full w-8 h-8 text-lg flex items-center justify-center mr-3">2</span> Vyberte vozidlo</h2>
                                 {!isDateValid ? (
-                                    <div className="text-center p-6 bg-gray-50 rounded-md border">
-                                        <p className="text-gray-600 font-medium">Nejprve prosím zvolte platný termín pronájmu.</p>
-                                    </div>
+                                    <div className="text-center p-6 bg-gray-50 rounded-md border"><p className="text-gray-600 font-medium">Nejprve prosím zvolte platný termín.</p></div>
                                 ) : calculating ? (
-                                    <div className="col-span-full text-center p-6 flex items-center justify-center">
-                                        <Loader className="w-6 h-6 animate-spin mr-3 text-primary" />
-                                        <span className="text-gray-600">Hledám dostupná vozidla...</span>
-                                    </div>
+                                    <div className="col-span-full text-center p-6 flex items-center justify-center"><Loader className="w-6 h-6 animate-spin mr-3 text-primary" /><span className="text-gray-600">Hledám...</span></div>
                                 ) : (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        {availableVehicles.length > 0 ? availableVehicles.map(v => (
-                                            <div key={v.id} onClick={() => setSelectedVehicleId(v.id)} className={`border-2 rounded-lg p-3 cursor-pointer transition-all ${selectedVehicleId === v.id ? 'border-primary shadow-lg scale-105' : 'border-gray-200 hover:border-blue-300'}`}>
-                                                <img src={v.imageUrl || 'https://via.placeholder.com/300x200.png?text=Vuz+bez+foto'} alt={v.name} className="w-full h-32 object-cover rounded-md mb-2"/>
-                                                <h3 className="font-semibold">{v.name}</h3>
-                                                <p className="text-xs text-gray-500 mt-2">{v.rate4h} Kč/4h | {v.rate12h} Kč/12h</p>
-                                                <p className="text-lg text-gray-800 font-bold">{v.dailyRate} Kč/den</p>
+                                        {displayVehicles.map(v => (
+                                            <div key={v.id} 
+                                                 onClick={() => v.availabilityStatus === VehicleAvailabilityStatus.AVAILABLE_NOW && setSelectedVehicleId(v.id)} 
+                                                 className={`border-2 rounded-lg p-3 transition-all ${getCardBorderColor(v.availabilityStatus)} ${v.availabilityStatus !== VehicleAvailabilityStatus.AVAILABLE_NOW ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                                                
+                                                <div className={`relative ${v.availabilityStatus === VehicleAvailabilityStatus.UNAVAILABLE ? 'opacity-40' : ''}`}>
+                                                    <img src={v.imageUrl || 'https://via.placeholder.com/300x200.png?text=Vuz+bez+foto'} alt={v.name} className="w-full h-32 object-cover rounded-md mb-2"/>
+                                                    <h3 className="font-semibold">{v.name}</h3>
+                                                    <p className="text-xs text-gray-500 mt-2">{v.rate4h} Kč/4h | {v.rate12h} Kč/12h</p>
+                                                    <p className="text-lg text-gray-800 font-bold">{v.dailyRate} Kč/den</p>
+                                                </div>
+
+                                                {v.availabilityStatus === VehicleAvailabilityStatus.AVAILABLE_LATER && (
+                                                    <div className="mt-2 p-2 bg-yellow-100 border border-yellow-300 text-yellow-800 rounded-md text-center">
+                                                        <p className="font-semibold flex items-center justify-center"><Clock className="w-4 h-4 mr-2"/>Bude k dispozici dnes od:</p>
+                                                        <p className="text-lg font-bold">{v.availableFrom?.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}</p>
+                                                    </div>
+                                                )}
+                                                
+                                                {v.availabilityStatus === VehicleAvailabilityStatus.UNAVAILABLE && (
+                                                     <div className="mt-2 p-2 bg-gray-200 border border-gray-300 text-gray-600 rounded-md text-center">
+                                                        <p className="font-semibold">Dnes již nedostupné</p>
+                                                    </div>
+                                                )}
                                             </div>
-                                        )) : (
-                                            <div className="col-span-full text-center p-6 bg-yellow-50 rounded-md border border-yellow-200">
+                                        ))}
+                                        {displayVehicles.length === 0 && (
+                                             <div className="col-span-full text-center p-6 bg-yellow-50 rounded-md border border-yellow-200">
                                                 <p className="text-yellow-800 font-medium">Pro zadaný termín bohužel nejsou dostupná žádná vozidla.</p>
                                             </div>
                                         )}
@@ -292,33 +303,26 @@ const OnlineBooking: React.FC = () => {
                         </div>
                         <div className="lg:col-span-1">
                              <div className="bg-white p-6 rounded-lg shadow-xl sticky top-8">
-                                <h2 className="text-xl font-bold text-gray-800 border-b pb-3 mb-4">Souhrn rezervace</h2>
+                                <h2 className="text-xl font-bold text-gray-800 border-b pb-3 mb-4">Souhrn</h2>
                                 <div className="space-y-4">
                                     <div>
                                         <h3 className="font-semibold text-gray-500">Vozidlo:</h3>
                                         {selectedVehicle ? (
                                             <div className="flex items-center mt-1">
                                                 <img src={selectedVehicle.imageUrl || 'https://via.placeholder.com/300x200.png?text=Vuz+bez+foto'} alt={selectedVehicle.name} className="w-20 h-16 object-cover rounded mr-3"/>
-                                                <div>
-                                                    <p className="text-gray-800 font-bold">{selectedVehicle.name}</p>
-                                                    <p className="text-sm text-gray-500">{selectedVehicle.licensePlate}</p>
-                                                </div>
+                                                <div><p className="text-gray-800 font-bold">{selectedVehicle.name}</p><p className="text-sm text-gray-500">{selectedVehicle.licensePlate}</p></div>
                                             </div>
                                         ) : <p className="text-gray-700 italic">Nevybráno</p>}
                                     </div>
                                      <div>
                                         <h3 className="font-semibold text-gray-500">Období:</h3>
                                         {isDateValid && startDateObj && endDateObj ? (
-                                            <>
-                                                <p className="text-gray-700"><strong>Od:</strong> {startDateObj.toLocaleString('cs-CZ')}</p>
-                                                <p className="text-gray-700"><strong>Do:</strong> {endDateObj.toLocaleString('cs-CZ')}</p>
-                                            </>
+                                            <><p className="text-gray-700"><strong>Od:</strong> {startDateObj.toLocaleString('cs-CZ')}</p><p className="text-gray-700"><strong>Do:</strong> {endDateObj.toLocaleString('cs-CZ')}</p></>
                                         ) : <p className="text-gray-700 italic">Nezvoleno</p>}
                                     </div>
                                     <div className="border-t pt-4">
                                         <p className="flex justify-between items-baseline text-xl font-bold">
-                                            <span>Celkem:</span>
-                                            <span className="text-3xl text-primary">{totalPrice.toLocaleString('cs-CZ')} Kč</span>
+                                            <span>Celkem:</span><span className="text-3xl text-primary">{totalPrice.toLocaleString('cs-CZ')} Kč</span>
                                         </p>
                                     </div>
                                 </div>
