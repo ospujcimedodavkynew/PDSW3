@@ -46,7 +46,7 @@ export interface Reservation {
     vehicleId: string;
     startDate: Date | string;
     endDate: Date | string;
-    status: 'pending-customer' | 'scheduled' | 'active' | 'completed';
+    status: 'pending-customer' | 'pending-approval' | 'scheduled' | 'active' | 'completed';
     startMileage?: number;
     endMileage?: number;
     notes?: string;

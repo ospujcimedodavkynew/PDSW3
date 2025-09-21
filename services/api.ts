@@ -328,6 +328,11 @@ export const updateReservation = async (reservationId: string, updates: Partial<
     return fromReservation(handleSupabaseError({ data, error }, 'update reservation'));
 };
 
+export const deleteReservation = async (reservationId: string): Promise<void> => {
+    const { error } = await supabase.from('reservations').delete().eq('id', reservationId);
+    handleSupabaseError({ data: null, error }, 'delete reservation');
+};
+
 export const addContract = async (contractData: Omit<Contract, 'id'>): Promise<Contract> => {
     const { data, error } = await supabase.from('contracts').insert([toContract(contractData)]).select().single();
     return fromContract(handleSupabaseError({ data, error }, 'add contract'));
@@ -382,7 +387,7 @@ export const submitCustomerDetails = async (token: string, customerData: Omit<Cu
     await updateReservation(foundReservation.id, { customerId: newCustomer.id, status: 'scheduled' });
 };
 
-export const createOnlineReservation = async (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>): Promise<void> => {
+export const createOnlineReservation = async (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>): Promise<Reservation> => {
     // Check if customer exists by email
     const { data: existingCustomer, error: findError } = await supabase
         .from('customers')
@@ -408,7 +413,8 @@ export const createOnlineReservation = async (vehicleId: string, startDate: Date
         customerId = newCustomer.id;
     }
 
-    // Create the reservation with the correct customer ID.
-    const reservationData: Omit<Reservation, 'id' | 'status'> = { customerId, vehicleId, startDate, endDate };
-    await addReservation(reservationData);
+    // Create the reservation with the correct customer ID and 'pending-approval' status.
+    const reservationData: Partial<Reservation> = { customerId, vehicleId, startDate, endDate, status: 'pending-approval' };
+    const { data, error } = await supabase.from('reservations').insert([toReservation(reservationData)]).select().single();
+    return fromReservation(handleSupabaseError({ data, error }, 'create online reservation'));
 };

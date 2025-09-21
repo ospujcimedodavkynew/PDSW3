@@ -6,6 +6,7 @@ import { useData } from '../contexts/DataContext';
 
 const statusColors: { [key in Reservation['status']]: string } = {
     'pending-customer': 'bg-yellow-400 border-yellow-500 text-yellow-800',
+    'pending-approval': 'bg-orange-400 border-orange-500 text-orange-800',
     'scheduled': 'bg-green-400 border-green-500 text-green-800',
     'active': 'bg-blue-400 border-blue-500 text-blue-800',
     'completed': 'bg-gray-400 border-gray-500 text-gray-800',

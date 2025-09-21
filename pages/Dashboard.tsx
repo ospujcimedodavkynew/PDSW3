@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { Reservation, Vehicle, Page, VehicleService } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { Car, Users, CalendarCheck, AlertTriangle, Link, ArrowRightLeft, Wrench, Phone, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { Car, Users, CalendarCheck, AlertTriangle, Link, ArrowRightLeft, Wrench, Phone, ArrowUpCircle, ArrowDownCircle, Bell } from 'lucide-react';
 import ReservationDetailModal from '../components/ReservationDetailModal';
 import SelfServiceModal from '../components/SelfServiceModal';
+import ApprovalModal from '../components/ApprovalModal';
 import { useData } from '../contexts/DataContext';
 
 
@@ -16,6 +17,7 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
     const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [isSelfServiceModalOpen, setIsSelfServiceModalOpen] = useState(false);
+    const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
 
 
     const serviceAlerts = useMemo(() => {
@@ -56,6 +58,11 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
     const activeRentals = reservations.filter(r => r.status === 'active');
 
     const maintenanceVehicles = vehicles.filter(v => v.status === 'maintenance');
+    
+    const pendingApprovalReservations = useMemo(() => 
+        reservations.filter(r => r.status === 'pending-approval'),
+        [reservations]
+    );
 
     const handleOpenDetailModal = (reservation: Reservation) => {
         setSelectedReservation(reservation);
@@ -130,6 +137,11 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
 
     return (
         <div className="space-y-6">
+            <ApprovalModal 
+                isOpen={isApprovalModalOpen} 
+                onClose={() => setIsApprovalModalOpen(false)} 
+                reservations={pendingApprovalReservations} 
+            />
             <ReservationDetailModal isOpen={isDetailModalOpen} onClose={handleCloseModal} reservation={selectedReservation} />
             <SelfServiceModal isOpen={isSelfServiceModalOpen} onClose={() => setIsSelfServiceModalOpen(false)} availableVehicles={vehicles.filter(v => v.status === 'available')} onLinkGenerated={onSelfServiceLinkGenerated} />
 
@@ -148,6 +160,21 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                     </button>
                 </div>
             </div>
+
+            {/* Approval Notification Card */}
+            {pendingApprovalReservations.length > 0 && (
+                <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 rounded-lg shadow-md flex justify-between items-center">
+                    <div className="flex items-center">
+                        <Bell className="w-6 h-6 mr-3" />
+                        <p>
+                            <span className="font-bold">Máte {pendingApprovalReservations.length} nových online rezervací</span>, které čekají na vaše schválení.
+                        </p>
+                    </div>
+                    <button onClick={() => setIsApprovalModalOpen(true)} className="bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-600 transition-colors whitespace-nowrap">
+                        Zobrazit a zpracovat
+                    </button>
+                </div>
+            )}
 
             {/* Key Metrics */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
