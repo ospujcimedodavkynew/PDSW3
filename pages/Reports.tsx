@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import type { FinancialTransaction, Vehicle, VehicleService } from '../types';
-import { DollarSign, TrendingUp, TrendingDown, Download, Loader, Car } from 'lucide-react';
+import type { FinancialTransaction, Vehicle, VehicleService, Reservation } from '../types';
+import { DollarSign, TrendingUp, TrendingDown, Download, Loader, Car, Gauge } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useData } from '../contexts/DataContext';
 
@@ -13,9 +13,21 @@ type VehicleProfitability = {
     profit: number;
 };
 
+type VehiclePerformance = {
+    vehicleId: string;
+    name: string;
+    licensePlate: string;
+    totalKm: number;
+    incomePerKm: number;
+    costPerKm: number;
+    netProfitPerKm: number;
+    totalProfit: number;
+};
+
+
 const Reports: React.FC = () => {
     const { data, loading } = useData();
-    const { financials: transactions, vehicles, services } = data;
+    const { financials: transactions, vehicles, services, reservations } = data;
 
     // Filter states
     const today = new Date();
@@ -48,6 +60,19 @@ const Reports: React.FC = () => {
             return s.status === 'completed' && sDate >= start && sDate <= end;
         });
     }, [services, startDate, endDate]);
+
+    const filteredCompletedReservations = useMemo(() => {
+        if (!startDate || !endDate) return [];
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        return reservations.filter(r => {
+            if (r.status !== 'completed' || !r.endDate) return false;
+            const rDate = new Date(r.endDate);
+            return rDate >= start && rDate <= end;
+        });
+    }, [reservations, startDate, endDate]);
     
     const { totalIncome, totalExpense, netProfit } = useMemo(() => {
         const income = filteredTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
@@ -87,6 +112,76 @@ const Reports: React.FC = () => {
         
         return Object.values(profitabilityMap).map(p => ({ ...p, profit: p.income - p.serviceCost })).sort((a,b) => b.profit - a.profit);
     }, [vehicles, filteredTransactions, filteredServices]);
+
+    const vehiclePerformanceData = useMemo<VehiclePerformance[]>(() => {
+        const performanceMap: Record<string, {
+            vehicleId: string; name: string; licensePlate: string;
+            totalKm: number; totalIncome: number; totalServiceCost: number;
+        }> = {};
+
+        vehicles.forEach(v => {
+            performanceMap[v.id] = { vehicleId: v.id, name: v.name, licensePlate: v.licensePlate, totalKm: 0, totalIncome: 0, totalServiceCost: 0 };
+        });
+
+        filteredCompletedReservations.forEach(r => {
+            if (r.vehicleId && r.startMileage && r.endMileage && performanceMap[r.vehicleId]) {
+                const kmDriven = r.endMileage - r.startMileage;
+                if (kmDriven > 0) performanceMap[r.vehicleId].totalKm += kmDriven;
+            }
+        });
+
+        filteredTransactions.forEach(t => {
+            if (t.type === 'income' && t.reservation?.vehicleId && performanceMap[t.reservation.vehicleId]) {
+                performanceMap[t.reservation.vehicleId].totalIncome += t.amount;
+            }
+        });
+
+        filteredServices.forEach(s => {
+            if (s.vehicleId && s.cost && performanceMap[s.vehicleId]) {
+                performanceMap[s.vehicleId].totalServiceCost += s.cost;
+            }
+        });
+
+        return Object.values(performanceMap).map(p => {
+            const incomePerKm = p.totalKm > 0 ? p.totalIncome / p.totalKm : 0;
+            const costPerKm = p.totalKm > 0 ? p.totalServiceCost / p.totalKm : 0;
+            return {
+                vehicleId: p.vehicleId, name: p.name, licensePlate: p.licensePlate, totalKm: p.totalKm,
+                incomePerKm, costPerKm,
+                netProfitPerKm: incomePerKm - costPerKm,
+                totalProfit: p.totalIncome - p.totalServiceCost,
+            };
+        });
+    }, [vehicles, filteredCompletedReservations, filteredTransactions, filteredServices]);
+
+    const [performanceSortConfig, setPerformanceSortConfig] = useState<{ key: keyof VehiclePerformance, direction: 'asc' | 'desc' }>({ key: 'netProfitPerKm', direction: 'desc' });
+
+    const sortedPerformanceData = useMemo(() => {
+        let sortableItems = [...vehiclePerformanceData];
+        sortableItems.sort((a, b) => {
+            if (a[performanceSortConfig.key] < b[performanceSortConfig.key]) {
+                return performanceSortConfig.direction === 'asc' ? -1 : 1;
+            }
+            if (a[performanceSortConfig.key] > b[performanceSortConfig.key]) {
+                return performanceSortConfig.direction === 'asc' ? 1 : -1;
+            }
+            return 0;
+        });
+        return sortableItems;
+    }, [vehiclePerformanceData, performanceSortConfig]);
+
+    const requestPerformanceSort = (key: keyof VehiclePerformance) => {
+        let direction: 'asc' | 'desc' = 'asc';
+        if (performanceSortConfig.key === key && performanceSortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setPerformanceSortConfig({ key, direction });
+    };
+
+    const getSortIndicator = (key: keyof VehiclePerformance) => {
+        if (performanceSortConfig.key !== key) return null;
+        return performanceSortConfig.direction === 'asc' ? '▲' : '▼';
+    };
     
     const handleExportCSV = () => {
         const headers = ["Datum", "Popis", "Typ", "Částka (Kč)"];
@@ -178,6 +273,37 @@ const Reports: React.FC = () => {
                                     <td className="px-6 py-4 text-right text-green-600 font-medium">{v.income.toLocaleString('cs-CZ')} Kč</td>
                                     <td className="px-6 py-4 text-right text-red-600 font-medium">{v.serviceCost.toLocaleString('cs-CZ')} Kč</td>
                                     <td className={`px-6 py-4 text-right font-bold ${v.profit >= 0 ? 'text-gray-800' : 'text-red-700'}`}>{v.profit.toLocaleString('cs-CZ')} Kč</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* NEW: Vehicle Performance */}
+            <div className="bg-white rounded-lg shadow-md">
+                <h2 className="text-xl font-bold text-gray-700 p-6 flex items-center"><Gauge className="mr-3 text-indigo-600"/>Efektivita a výkonnost vozidel</h2>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                        <thead>
+                            <tr className="bg-gray-100 text-left text-gray-600 uppercase text-sm">
+                                <th className="px-6 py-3">Vozidlo</th>
+                                <th onClick={() => requestPerformanceSort('totalKm')} className="px-6 py-3 text-right cursor-pointer">Ujeto {getSortIndicator('totalKm')}</th>
+                                <th onClick={() => requestPerformanceSort('incomePerKm')} className="px-6 py-3 text-right cursor-pointer">Příjmy/km {getSortIndicator('incomePerKm')}</th>
+                                <th onClick={() => requestPerformanceSort('costPerKm')} className="px-6 py-3 text-right cursor-pointer">Náklady/km {getSortIndicator('costPerKm')}</th>
+                                <th onClick={() => requestPerformanceSort('netProfitPerKm')} className="px-6 py-3 text-right cursor-pointer">Čistý zisk/km {getSortIndicator('netProfitPerKm')}</th>
+                                <th onClick={() => requestPerformanceSort('totalProfit')} className="px-6 py-3 text-right cursor-pointer">Celkový zisk {getSortIndicator('totalProfit')}</th>
+                            </tr>
+                        </thead>
+                         <tbody>
+                            {sortedPerformanceData.map(p => (
+                                <tr key={p.vehicleId} className="hover:bg-gray-50 border-t">
+                                    <td className="px-6 py-4 whitespace-nowrap font-semibold">{p.name} <span className="text-gray-500 font-normal">({p.licensePlate})</span></td>
+                                    <td className="px-6 py-4 text-right">{p.totalKm.toLocaleString('cs-CZ')} km</td>
+                                    <td className="px-6 py-4 text-right text-green-700">{p.incomePerKm.toFixed(2)} Kč</td>
+                                    <td className="px-6 py-4 text-right text-red-700">{p.costPerKm.toFixed(2)} Kč</td>
+                                    <td className={`px-6 py-4 text-right font-bold ${p.netProfitPerKm >= 0 ? 'text-green-800' : 'text-red-800'}`}>{p.netProfitPerKm.toFixed(2)} Kč</td>
+                                    <td className={`px-6 py-4 text-right font-bold ${p.totalProfit >= 0 ? 'text-gray-800' : 'text-red-700'}`}>{p.totalProfit.toLocaleString('cs-CZ')} Kč</td>
                                 </tr>
                             ))}
                         </tbody>
