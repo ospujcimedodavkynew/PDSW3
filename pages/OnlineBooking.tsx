@@ -209,16 +209,28 @@ const OnlineBooking: React.FC = () => {
         )
     }
 
-    const getCardBorderColor = (status: VehicleAvailabilityStatus) => {
+    const getCardBorderColor = (status: VehicleAvailabilityStatus, vehicleId: string) => {
+        if (selectedVehicleId === vehicleId) {
+             return 'border-primary shadow-lg scale-105';
+        }
         switch (status) {
             case VehicleAvailabilityStatus.AVAILABLE_NOW:
-                return selectedVehicleId === selectedVehicle?.id ? 'border-primary shadow-lg scale-105' : 'border-green-400 hover:border-blue-400';
+                return 'border-green-400 hover:border-blue-400';
             case VehicleAvailabilityStatus.AVAILABLE_LATER:
                 return 'border-yellow-400';
             case VehicleAvailabilityStatus.UNAVAILABLE:
                 return 'border-gray-200';
         }
     }
+    
+    const durationPresets = [
+        {label: '4 hod', duration: 4, unit: 'hours' as const},
+        {label: '12 hod', duration: 12, unit: 'hours' as const},
+        {label: '1 den', duration: 1, unit: 'days' as const},
+        {label: 'Víkend (2 dny)', duration: 2, unit: 'days' as const},
+        {label: 'Týden', duration: 7, unit: 'days' as const},
+        {label: 'Měsíc (30 dní)', duration: 30, unit: 'days' as const}
+    ];
 
     return (
         <div className="min-h-screen bg-gray-100 p-4 sm:p-6 lg:p-8 font-sans">
@@ -238,7 +250,19 @@ const OnlineBooking: React.FC = () => {
                                     <div><label className="block text-sm font-medium">Do</label><input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-2 border rounded-md" required /></div>
                                 </div>
                                 {dateError && <p className="text-red-500 text-sm mt-2">{dateError}</p>}
-                                <div className="mt-4 flex flex-wrap items-center gap-2"><span className="text-sm font-medium text-gray-700 mr-2">Rychlá volba:</span>{/* Buttons */}</div>
+                                <div className="mt-4 flex flex-wrap items-center gap-2">
+                                    <span className="text-sm font-medium text-gray-700 mr-2">Rychlá volba:</span>
+                                    {durationPresets.map(preset => (
+                                        <button
+                                            type="button"
+                                            key={preset.label}
+                                            onClick={() => handleSetDuration(preset.duration, preset.unit)}
+                                            className="px-3 py-1 text-sm bg-gray-200 rounded-full hover:bg-gray-300 transition-colors"
+                                        >
+                                            {preset.label}
+                                        </button>
+                                    ))}
+                                </div>
                             </section>
 
                             <section>
@@ -252,7 +276,7 @@ const OnlineBooking: React.FC = () => {
                                         {displayVehicles.map(v => (
                                             <div key={v.id} 
                                                  onClick={() => v.availabilityStatus === VehicleAvailabilityStatus.AVAILABLE_NOW && setSelectedVehicleId(v.id)} 
-                                                 className={`border-2 rounded-lg p-3 transition-all ${getCardBorderColor(v.availabilityStatus)} ${v.availabilityStatus !== VehicleAvailabilityStatus.AVAILABLE_NOW ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                                                 className={`border-2 rounded-lg p-3 transition-all ${getCardBorderColor(v.availabilityStatus, v.id)} ${v.availabilityStatus !== VehicleAvailabilityStatus.AVAILABLE_NOW ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                                                 
                                                 <div className={`relative ${v.availabilityStatus === VehicleAvailabilityStatus.UNAVAILABLE ? 'opacity-40' : ''}`}>
                                                     <img src={v.imageUrl || 'https://via.placeholder.com/300x200.png?text=Vuz+bez+foto'} alt={v.name} className="w-full h-32 object-cover rounded-md mb-2"/>
