@@ -241,15 +241,37 @@ Digitální podpis nájemce:
                 contractText,
             });
 
+            // Prepare email details
             const bccEmail = "smlouvydodavky@gmail.com";
-            const mailtoBody = encodeURIComponent(contractText);
-            const mailtoLink = `mailto:${customerForContract.email}?bcc=${bccEmail}&subject=${encodeURIComponent(`Smlouva o pronájmu vozidla ${contractVehicle.name}`)}&body=${mailtoBody}`;
+            const mailtoSubject = `Smlouva o pronájmu vozidla ${contractVehicle.name}`;
             
-            window.location.href = mailtoLink;
-
-            alert("Rezervace byla úspěšně vytvořena a smlouva uložena! Nyní budete přesměrováni do emailového klienta pro odeslání smlouvy.");
-            
+            // Reset form before alert and redirection
             resetForm();
+
+            // Try to copy to clipboard
+            try {
+                await navigator.clipboard.writeText(contractText);
+                
+                // Prepare email body with instruction to paste
+                const mailtoBody = `Dobrý den,\n\nděkujeme za Vaši rezervaci.\n\n(PROSÍM VLOŽTE ZKOPÍROVANÝ TEXT SMLOUVY SEM - např. pomocí CTRL+V)\n\nS pozdravem,\nTým PujcimeDodavky.cz`;
+                const mailtoLink = `mailto:${customerForContract.email}?bcc=${bccEmail}&subject=${encodeURIComponent(mailtoSubject)}&body=${encodeURIComponent(mailtoBody)}`;
+                
+                // Then alert and redirect
+                alert("Rezervace vytvořena a smlouva uložena! Text smlouvy byl zkopírován do schránky. Nyní se otevře emailový klient, kde prosím vložte text do těla emailu.");
+                window.open(mailtoLink);
+
+            } catch (err) {
+                // Fallback for clipboard error
+                console.error('Failed to copy contract text: ', err);
+
+                // Prepare email body with different instruction
+                const mailtoBody = `Dobrý den,\n\nděkujeme za Vaši rezervaci.\n\n(Prosím, zkopírujte text smlouvy ze sekce 'Smlouvy' v aplikaci a vložte jej sem.)\n\nS pozdravem,\nTým PujcimeDodavky.cz`;
+                const mailtoLink = `mailto:${customerForContract.email}?bcc=${bccEmail}&subject=${encodeURIComponent(mailtoSubject)}&body=${encodeURIComponent(mailtoBody)}`;
+                
+                // Then alert and redirect
+                alert("Rezervace vytvořena a smlouva uložena. Text smlouvy se nepodařilo zkopírovat. Nyní se otevře emailový klient. Prosím, zkopírujte text ručně ze sekce 'Smlouvy' a vložte jej do emailu.");
+                window.open(mailtoLink);
+            }
 
         } catch (error) {
             console.error("Failed to create reservation:", error);
