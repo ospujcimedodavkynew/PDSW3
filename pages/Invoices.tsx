@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
 import { Invoice, Contract } from '../types';
-import { Plus, Search, ChevronLeft, Printer, User, Car, FileText, Calendar, Hash } from 'lucide-react';
+import { Plus, Search, ChevronLeft, Printer, User, Car, FileText, Calendar, Hash, Send } from 'lucide-react';
 import InvoiceFormModal from '../components/InvoiceFormModal';
 
 const Invoices: React.FC = () => {
@@ -11,6 +11,7 @@ const Invoices: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [showSendConfirmation, setShowSendConfirmation] = useState(false);
     
     const contractsReadyForInvoicing = useMemo<Contract[]>(() => {
         const invoicedContractIds = new Set(invoices.map(inv => inv.contractId));
@@ -31,12 +32,35 @@ const Invoices: React.FC = () => {
                 invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase());
         }).sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime());
     }, [invoices, searchTerm]);
+    
+    const handleSendEmail = () => {
+        if (!selectedInvoice || !selectedInvoice.customerJson.email) return;
+
+        navigator.clipboard.writeText(selectedInvoice.customerJson.email).then(() => {
+            setShowSendConfirmation(true);
+            setTimeout(() => setShowSendConfirmation(false), 5000); // Hide after 5 seconds
+            
+            setTimeout(() => {
+                window.print();
+            }, 300);
+
+        }).catch(err => {
+            console.error('Failed to copy email: ', err);
+            alert('Nepodařilo se zkopírovat e-mail zákazníka.');
+        });
+    };
 
     if (loading && invoices.length === 0) return <div>Načítání faktur...</div>;
 
     if (selectedInvoice) {
         return (
             <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg">
+                {showSendConfirmation && (
+                    <div className="bg-green-100 border-l-4 border-green-500 text-green-800 p-4 rounded-md mb-6 print:hidden" role="alert">
+                        <p className="font-bold">Hotovo!</p>
+                        <p>E-mail zákazníka byl zkopírován do schránky. Nyní můžete fakturu uložit jako PDF a odeslat.</p>
+                    </div>
+                )}
                 <div className="flex justify-between items-start mb-6 print:hidden">
                     <div>
                          <button onClick={() => setSelectedInvoice(null)} className="text-sm text-gray-600 hover:text-gray-900 flex items-center mb-2">
@@ -44,9 +68,14 @@ const Invoices: React.FC = () => {
                         </button>
                         <h2 className="text-2xl font-bold">Faktura - {selectedInvoice.invoiceNumber}</h2>
                     </div>
-                     <button onClick={() => window.print()} className="bg-primary text-white py-2 px-4 rounded-lg hover:bg-primary-hover flex items-center">
-                        <Printer className="w-4 h-4 mr-2"/> Tisknout
-                    </button>
+                     <div className="flex items-center space-x-2">
+                        <button onClick={handleSendEmail} className="bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 flex items-center">
+                            <Send className="w-4 h-4 mr-2"/> Odeslat e-mailem
+                        </button>
+                        <button onClick={() => window.print()} className="bg-primary text-white py-2 px-4 rounded-lg hover:bg-primary-hover flex items-center">
+                            <Printer className="w-4 h-4 mr-2"/> Tisknout
+                        </button>
+                    </div>
                 </div>
 
                 <div className="border p-8 printable-area">
