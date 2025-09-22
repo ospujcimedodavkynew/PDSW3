@@ -37,6 +37,37 @@
   }
 }
 </script>
+<style>
+      @media print {
+        /* Hide everything on the page by default */
+        body * {
+          visibility: hidden;
+        }
+        
+        /* Make the printable area and everything inside it visible */
+        .printable-area, .printable-area * {
+          visibility: visible;
+        }
+        
+        /* Position the printable area to take up the whole page */
+        .printable-area {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          padding: 20px; /* Add some margin for printing */
+          margin: 0;
+          border: none;
+          box-shadow: none;
+        }
+        
+        /* Ensure no scrollbars in print preview */
+        html, body {
+            height: auto;
+            overflow: visible;
+        }
+      }
+    </style>
 <link rel="stylesheet" href="/index.css">
 </head>
 <body class="bg-light-bg text-dark-text">
