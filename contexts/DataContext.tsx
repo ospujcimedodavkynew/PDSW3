@@ -247,6 +247,7 @@ IČO: 07031653
 Nájemce:
 Jméno: ${customerForContract.firstName} ${customerForContract.lastName}
 Adresa: ${customerForContract.address}
+${customerForContract.ico ? `IČO: ${customerForContract.ico}` : ''}
 Email: ${customerForContract.email}
 Telefon: ${customerForContract.phone}
 Číslo ŘP: ${customerForContract.driverLicenseNumber}
@@ -293,7 +294,7 @@ Telefon: ${customerForContract.phone}
 1. Tato smlouva nabývá platnosti a účinnosti dnem jejího podpisu oběma smluvními stranami.
 2. Smluvní strany prohlašují, že si smlouvu přečetly, s jejím obsahem souhlasí a na důkaz toho připojují své podpisy.
 3. Smlouva byla vygenerována automaticky při převzetí vozidla na základě online rezervace, jejíž podmínky zákazník odsouhlasil. Zákazník svým převzetím vozidla stvrzuje souhlas s podmínkami této smlouvy.
-                `;
+                `.trim();
 
                 await api.addContract({
                     reservationId: reservation.id,

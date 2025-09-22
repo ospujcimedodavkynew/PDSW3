@@ -13,7 +13,7 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, onClose, 
     const { actions } = useData();
     
     const getInitialData = (c: Partial<Customer> | null): Partial<Customer> => c || {
-        firstName: '', lastName: '', email: '', phone: '', driverLicenseNumber: '', address: ''
+        firstName: '', lastName: '', email: '', phone: '', driverLicenseNumber: '', address: '', ico: ''
     };
 
     const [formData, setFormData] = useState<Partial<Customer>>(getInitialData(customer));
@@ -66,6 +66,7 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ isOpen, onClose, 
                         <input type="tel" placeholder="Telefon" value={formData.phone || ''} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full p-2 border rounded" required />
                         <input type="text" placeholder="Číslo ŘP" value={formData.driverLicenseNumber || ''} onChange={e => setFormData({ ...formData, driverLicenseNumber: e.target.value })} className="w-full p-2 border rounded" required />
                     </div>
+                    <input type="text" placeholder="IČO (volitelné)" value={formData.ico || ''} onChange={e => setFormData({ ...formData, ico: e.target.value })} className="w-full p-2 border rounded" />
 
                     {error && (
                         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">

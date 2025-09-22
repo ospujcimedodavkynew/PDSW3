@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import type { Customer } from '../types';
-import { Plus, User, Mail, Phone, Edit, MapPin, Search } from 'lucide-react';
+import { Plus, User, Mail, Phone, Edit, MapPin, Search, Building } from 'lucide-react';
 import CustomerFormModal from '../components/CustomerFormModal';
 import { useData } from '../contexts/DataContext';
 
@@ -17,6 +17,7 @@ const CustomerCard: React.FC<{ customer: Customer; onEdit: (customer: Customer) 
                     </div>
                 </div>
                 <div className="space-y-2 text-sm">
+                    {customer.ico && <p className="flex items-center text-gray-600 font-semibold"><Building className="w-4 h-4 mr-2 flex-shrink-0" /> IČO: {customer.ico}</p>}
                     <p className="flex items-center text-gray-600 truncate"><Mail className="w-4 h-4 mr-2 flex-shrink-0" />{customer.email}</p>
                     <p className="flex items-center text-gray-600"><Phone className="w-4 h-4 mr-2 flex-shrink-0" />{customer.phone}</p>
                     <p className="flex items-start text-gray-600"><MapPin className="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" />{customer.address}</p>

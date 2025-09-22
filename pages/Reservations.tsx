@@ -18,7 +18,7 @@ const DRAFT_KEY = 'reservationFormDraft';
 const initialFormData: ReservationFormData = {
     selectedCustomerId: '',
     isNewCustomer: false,
-    newCustomerData: { firstName: '', lastName: '', email: '', phone: '', driverLicenseNumber: '', address: '' },
+    newCustomerData: { firstName: '', lastName: '', email: '', phone: '', driverLicenseNumber: '', address: '', ico: '' },
     selectedVehicleId: '',
     startDate: '',
     endDate: '',
@@ -28,7 +28,9 @@ const loadDraft = (): ReservationFormData => {
     try {
         const draft = sessionStorage.getItem(DRAFT_KEY);
         if (draft) {
-            return JSON.parse(draft);
+            // Ensure draft has all keys, especially new ones like 'ico'
+            const parsedDraft = JSON.parse(draft);
+            return { ...initialFormData, ...parsedDraft, newCustomerData: { ...initialFormData.newCustomerData, ...parsedDraft.newCustomerData }};
         }
     } catch (error) {
         console.error("Failed to parse reservation draft:", error);
@@ -185,6 +187,7 @@ IČO: 07031653
 Nájemce:
 Jméno: ${customerForContract.firstName} ${customerForContract.lastName}
 Adresa: ${customerForContract.address}
+${customerForContract.ico ? `IČO: ${customerForContract.ico}` : ''}
 Email: ${customerForContract.email}
 Telefon: ${customerForContract.phone}
 Číslo ŘP: ${customerForContract.driverLicenseNumber}
@@ -234,7 +237,7 @@ Telefon: ${customerForContract.phone}
 
 Digitální podpis nájemce:
 (viz přiložený obrazový soubor)
-            `;
+            `.trim();
             
             await actions.addContract({
                 reservationId: newReservation.id,
@@ -390,6 +393,7 @@ Digitální podpis nájemce:
                                      <input type="tel" placeholder="Telefon" value={newCustomerData.phone} onChange={e => handleNewCustomerDataChange('phone', e.target.value)} className="w-full p-2 border rounded" required />
                                     <input type="text" placeholder="Číslo ŘP" value={newCustomerData.driverLicenseNumber} onChange={e => handleNewCustomerDataChange('driverLicenseNumber', e.target.value)} className="w-full p-2 border rounded" required />
                                 </div>
+                                <input type="text" placeholder="IČO (volitelné)" value={newCustomerData.ico || ''} onChange={e => handleNewCustomerDataChange('ico', e.target.value)} className="w-full p-2 border rounded" />
                             </div>
                         )}
                     </section>
