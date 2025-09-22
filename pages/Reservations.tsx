@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Reservation, Vehicle, Customer } from '../types';
-import { UserPlus, Car, Calendar as CalendarIcon, Signature, Edit, Search } from 'lucide-react';
+import { UserPlus, Car, Calendar as CalendarIcon, Signature, Edit, Search, X, Copy, CheckCircle, Mail } from 'lucide-react';
 import SignatureModal from '../components/SignatureModal';
 import { useData } from '../contexts/DataContext';
 
@@ -52,6 +52,9 @@ const Reservations: React.FC = () => {
     const [signatureDataUrl, setSignatureDataUrl] = useState<string>('');
     const [customerSearchTerm, setCustomerSearchTerm] = useState('');
     
+    const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
+    const [generatedContractInfo, setGeneratedContractInfo] = useState<{contractText: string, customerEmail: string} | null>(null);
+
     const filteredCustomers = useMemo(() => {
         if (!customerSearchTerm) return customers;
         const lowercasedTerm = customerSearchTerm.toLowerCase();
@@ -241,37 +244,17 @@ Digitální podpis nájemce:
                 contractText,
             });
 
-            // Prepare email details
-            const bccEmail = "smlouvydodavky@gmail.com";
-            const mailtoSubject = `Smlouva o pronájmu vozidla ${contractVehicle.name}`;
-            
-            // Reset form before alert and redirection
+            // Set contract info for the confirmation modal
+            setGeneratedContractInfo({
+                contractText: contractText,
+                customerEmail: customerForContract.email
+            });
+
+            // Open the confirmation modal
+            setIsConfirmationModalOpen(true);
+
+            // Reset the main form
             resetForm();
-
-            // Try to copy to clipboard
-            try {
-                await navigator.clipboard.writeText(contractText);
-                
-                // Prepare email body with instruction to paste
-                const mailtoBody = `Dobrý den,\n\nděkujeme za Vaši rezervaci.\n\n(PROSÍM VLOŽTE ZKOPÍROVANÝ TEXT SMLOUVY SEM - např. pomocí CTRL+V)\n\nS pozdravem,\nTým PujcimeDodavky.cz`;
-                const mailtoLink = `mailto:${customerForContract.email}?bcc=${bccEmail}&subject=${encodeURIComponent(mailtoSubject)}&body=${encodeURIComponent(mailtoBody)}`;
-                
-                // Then alert and redirect
-                alert("Rezervace vytvořena a smlouva uložena! Text smlouvy byl zkopírován do schránky. Nyní se otevře emailový klient, kde prosím vložte text do těla emailu.");
-                window.open(mailtoLink);
-
-            } catch (err) {
-                // Fallback for clipboard error
-                console.error('Failed to copy contract text: ', err);
-
-                // Prepare email body with different instruction
-                const mailtoBody = `Dobrý den,\n\nděkujeme za Vaši rezervaci.\n\n(Prosím, zkopírujte text smlouvy ze sekce 'Smlouvy' v aplikaci a vložte jej sem.)\n\nS pozdravem,\nTým PujcimeDodavky.cz`;
-                const mailtoLink = `mailto:${customerForContract.email}?bcc=${bccEmail}&subject=${encodeURIComponent(mailtoSubject)}&body=${encodeURIComponent(mailtoBody)}`;
-                
-                // Then alert and redirect
-                alert("Rezervace vytvořena a smlouva uložena. Text smlouvy se nepodařilo zkopírovat. Nyní se otevře emailový klient. Prosím, zkopírujte text ručně ze sekce 'Smlouvy' a vložte jej do emailu.");
-                window.open(mailtoLink);
-            }
 
         } catch (error) {
             console.error("Failed to create reservation:", error);
@@ -298,6 +281,57 @@ Digitální podpis nájemce:
     const handleSelectCustomer = (customerId: string) => {
         setFormData(prev => ({ ...prev, selectedCustomerId: customerId, isNewCustomer: false }));
     };
+    
+    const ConfirmationModal = () => {
+        const [copyTextStatus, setCopyTextStatus] = useState('Kopírovat text smlouvy');
+        const [copyEmailStatus, setCopyEmailStatus] = useState('Kopírovat e-mail zákazníka');
+    
+        if (!generatedContractInfo) return null;
+    
+        const handleCopy = (text: string, setStatus: React.Dispatch<React.SetStateAction<string>>, successMessage: string, originalMessage: string) => {
+            navigator.clipboard.writeText(text).then(() => {
+                setStatus(successMessage);
+                setTimeout(() => setStatus(originalMessage), 2000);
+            }).catch(err => {
+                alert('Nepodařilo se zkopírovat text.');
+                console.error(err);
+            });
+        };
+    
+        return (
+            <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50">
+                <div className="bg-white rounded-lg shadow-2xl p-8 w-full max-w-lg text-center">
+                    <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                    <h2 className="text-2xl font-bold mb-2">Rezervace a smlouva vytvořena!</h2>
+                    <p className="text-gray-600 mb-6">
+                        Smlouva byla úspěšně uložena do archivu. Nyní ji můžete snadno odeslat zákazníkovi.
+                    </p>
+                    <div className="space-y-3">
+                        <button
+                            onClick={() => handleCopy(generatedContractInfo.contractText, setCopyTextStatus, 'Zkopírováno!', 'Kopírovat text smlouvy')}
+                            className={`w-full flex items-center justify-center py-3 px-4 rounded-lg font-semibold transition-colors ${copyTextStatus.includes('!') ? 'bg-green-600 text-white' : 'bg-blue-100 text-blue-800 hover:bg-blue-200'}`}
+                        >
+                            <Copy className="w-5 h-5 mr-3" /> {copyTextStatus}
+                        </button>
+                        <button
+                            onClick={() => handleCopy(generatedContractInfo.customerEmail, setCopyEmailStatus, 'Zkopírováno!', 'Kopírovat e-mail zákazníka')}
+                            className={`w-full flex items-center justify-center py-3 px-4 rounded-lg font-semibold transition-colors ${copyEmailStatus.includes('!') ? 'bg-green-600 text-white' : 'bg-blue-100 text-blue-800 hover:bg-blue-200'}`}
+                        >
+                            <Mail className="w-5 h-5 mr-3" /> {copyEmailStatus}
+                        </button>
+                    </div>
+                    <div className="mt-6">
+                        <button
+                            onClick={() => setIsConfirmationModalOpen(false)}
+                            className="py-2 px-8 rounded-lg bg-gray-200 hover:bg-gray-300 font-semibold"
+                        >
+                            Hotovo
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     return (
         <>
@@ -306,6 +340,8 @@ Digitální podpis nájemce:
             onClose={() => setIsSignatureModalOpen(false)}
             onSave={handleSaveSignature}
         />
+        {isConfirmationModalOpen && <ConfirmationModal />}
+
         <form onSubmit={handleSubmit} className="space-y-8">
             <h1 className="text-3xl font-bold text-gray-800">Nová rezervace</h1>
             
