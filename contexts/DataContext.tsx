@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import * as api from '../services/api';
-import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage, HandoverProtocol } from '../types';
+import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage, HandoverProtocol, CompanySettings, Invoice } from '../types';
 import { Session, RealtimeChannel } from '@supabase/supabase-js';
 
 
@@ -12,6 +12,8 @@ interface AppData {
     handoverProtocols: HandoverProtocol[];
     financials: FinancialTransaction[];
     services: VehicleService[];
+    settings: CompanySettings | null;
+    invoices: Invoice[];
 }
 
 export interface ProtocolData {
@@ -40,6 +42,8 @@ interface DataContextActions {
     updateService: (serviceId: string, updates: Partial<VehicleService>) => Promise<void>;
     addDamage: (damageData: { vehicleId: string; reservationId: string; description: string; location: string; imageFile: File; }) => Promise<void>;
     createOnlineReservation: (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>) => Promise<void>;
+    updateSettings: (settingsData: Omit<CompanySettings, 'id'>) => Promise<void>;
+    addInvoice: (invoiceData: Omit<Invoice, 'id'>) => Promise<Invoice>;
 }
 
 interface DataContextState {
@@ -59,10 +63,11 @@ export const useData = () => {
     return context;
 };
 
-const expandData = (data: Omit<AppData, 'handoverProtocols'> & { handoverProtocols: HandoverProtocol[] }): AppData => {
+const expandData = (data: Omit<AppData, 'handoverProtocols' | 'settings' | 'invoices'> & { handoverProtocols: HandoverProtocol[], settings: CompanySettings | null, invoices: Invoice[] }): AppData => {
     const vehiclesById = new Map(data.vehicles.map(v => [v.id, v]));
     const customersById = new Map(data.customers.map(c => [c.id, c]));
     const reservationsById = new Map(data.reservations.map(r => [r.id, r]));
+    const contractsById = new Map(data.contracts.map(c => [c.id, c]));
 
     const reservations = data.reservations.map(r => ({
         ...r,
@@ -92,15 +97,21 @@ const expandData = (data: Omit<AppData, 'handoverProtocols'> & { handoverProtoco
         ...f,
         reservation: data.reservations.find(r => r.id === f.reservationId)
     }));
+    
+    const invoices = data.invoices.map(i => ({
+        ...i,
+        customer: customersById.get(i.customerId),
+        contract: contractsById.get(i.contractId),
+    }));
 
 
-    return { ...data, reservations, contracts, handoverProtocols, services, financials };
+    return { ...data, reservations, contracts, handoverProtocols, services, financials, invoices };
 };
 
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [data, setData] = useState<AppData>({
-        vehicles: [], customers: [], reservations: [], contracts: [], handoverProtocols: [], financials: [], services: [],
+        vehicles: [], customers: [], reservations: [], contracts: [], handoverProtocols: [], financials: [], services: [], settings: null, invoices: [],
     });
     const [session, setSession] = useState<Session | null>(null);
     const [authLoading, setAuthLoading] = useState(true);
@@ -125,7 +136,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setDataLoading(true);
         try {
             const fetchedData = await api.getAllData();
-            const expanded = expandData(fetchedData);
+            const expanded = expandData(fetchedData as any); // cast as any to handle initial null settings
             setData(expanded);
         } catch (error) {
             console.error("Failed to fetch data", error);
@@ -146,7 +157,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
 
         } else {
-            setData({ vehicles: [], customers: [], reservations: [], contracts: [], handoverProtocols: [], financials: [], services: [] });
+            setData({ vehicles: [], customers: [], reservations: [], contracts: [], handoverProtocols: [], financials: [], services: [], settings: null, invoices: [] });
             setDataLoading(false);
         }
 
@@ -406,7 +417,16 @@ Zákazník digitálně odsouhlasil obsah tohoto protokolu dne ${new Date().toLoc
         createOnlineReservation: async (vehicleId, startDate, endDate, customerData) => {
             await api.createOnlineReservation(vehicleId, startDate, endDate, customerData);
             // No local refresh needed, realtime listener will trigger it.
-        }
+        },
+        updateSettings: async (settingsData) => {
+            const updatedSettings = await api.updateSettings(settingsData);
+            setData(prev => expandData({ ...prev, settings: updatedSettings }));
+        },
+        addInvoice: async (invoiceData) => {
+            const newInvoice = await api.addInvoice(invoiceData);
+            setData(prev => expandData({ ...prev, invoices: [...prev.invoices, newInvoice] }));
+            return newInvoice;
+        },
     }), [data, refreshData]);
 
     const value = { data, loading: authLoading || (!!session && dataLoading), actions, session };

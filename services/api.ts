@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient';
 import { Session, RealtimeChannel } from '@supabase/supabase-js';
-import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage, HandoverProtocol } from '../types';
+import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage, HandoverProtocol, CompanySettings, Invoice } from '../types';
 
 // --- Mappers: Supabase (snake_case) <-> Application (camelCase) ---
 
@@ -199,6 +199,59 @@ const toDamage = (d: Partial<VehicleDamage>) => {
     return payload;
 };
 
+const fromSettings = (s: any): CompanySettings => s && ({
+    id: s.id,
+    companyName: s.company_name,
+    address: s.address,
+    ico: s.ico,
+    dic: s.dic,
+    bankAccount: s.bank_account,
+    iban: s.iban,
+    swift: s.swift,
+    contactEmail: s.contact_email,
+    contactPhone: s.contact_phone,
+});
+
+const toSettings = (s: Partial<CompanySettings>) => ({
+    company_name: s.companyName,
+    address: s.address,
+    ico: s.ico,
+    dic: s.dic,
+    bank_account: s.bankAccount,
+    iban: s.iban,
+    swift: s.swift,
+    contact_email: s.contactEmail,
+    contact_phone: s.contactPhone,
+});
+
+const fromInvoice = (i: any): Invoice => i && ({
+    id: i.id,
+    invoiceNumber: i.invoice_number,
+    contractId: i.contract_id,
+    customerId: i.customer_id,
+    issueDate: i.issue_date,
+    dueDate: i.due_date,
+    paymentMethod: i.payment_method,
+    totalAmount: i.total_amount,
+    status: i.status,
+    supplierJson: i.supplier_json,
+    customerJson: i.customer_json,
+});
+
+const toInvoice = (i: Partial<Invoice>) => ({
+    invoice_number: i.invoiceNumber,
+    contract_id: i.contractId,
+    customer_id: i.customerId,
+    issue_date: i.issueDate,
+    due_date: i.dueDate,
+    payment_method: i.paymentMethod,
+    total_amount: i.totalAmount,
+    status: i.status,
+    supplier_json: i.supplierJson,
+    customer_json: i.customerJson,
+});
+
+
 // Utility to handle Supabase errors
 const handleSupabaseError = ({ error, data }: { error: any, data: any }, entityName: string) => {
     if (error) {
@@ -244,7 +297,7 @@ export const removeChannel = (channel: RealtimeChannel) => {
 
 // --- Data Fetching (For Authenticated Admin) ---
 export const getAllData = async () => {
-    const [vehiclesRes, customersRes, reservationsRes, contractsRes, protocolsRes, financialsRes, servicesRes] = await Promise.all([
+    const [vehiclesRes, customersRes, reservationsRes, contractsRes, protocolsRes, financialsRes, servicesRes, settingsRes, invoicesRes] = await Promise.all([
         supabase.from('vehicles').select('*'),
         supabase.from('customers').select('*'),
         supabase.from('reservations').select('*'),
@@ -252,6 +305,8 @@ export const getAllData = async () => {
         supabase.from('handover_protocols').select('*'),
         supabase.from('financial_transactions').select('*'),
         supabase.from('vehicle_services').select('*'),
+        supabase.from('company_settings').select('*').limit(1).single(),
+        supabase.from('invoices').select('*'),
     ]);
 
     // Handle potential errors for all fetches
@@ -262,6 +317,8 @@ export const getAllData = async () => {
     handleSupabaseError(protocolsRes, 'handover_protocols');
     handleSupabaseError(financialsRes, 'financials');
     handleSupabaseError(servicesRes, 'services');
+    handleSupabaseError(invoicesRes, 'invoices');
+    // Settings can be null if not set, that's okay, so no error handling
     
     return {
         vehicles: vehiclesRes.data!.map(fromVehicle),
@@ -271,6 +328,8 @@ export const getAllData = async () => {
         handoverProtocols: protocolsRes.data!.map(fromHandoverProtocol),
         financials: financialsRes.data!.map(fromFinancial),
         services: servicesRes.data!.map(fromService),
+        settings: settingsRes.data ? fromSettings(settingsRes.data) : null,
+        invoices: invoicesRes.data!.map(fromInvoice),
     };
 };
 
@@ -436,4 +495,18 @@ export const createOnlineReservation = async (vehicleId: string, startDate: Date
     const reservationData: Partial<Reservation> = { customerId, vehicleId, startDate, endDate, status: 'pending-approval' };
     const { data, error } = await supabase.from('reservations').insert([toReservation(reservationData)]).select().single();
     return fromReservation(handleSupabaseError({ data, error }, 'create online reservation'));
+};
+
+export const updateSettings = async (settingsData: Omit<CompanySettings, 'id'>): Promise<CompanySettings> => {
+    const { data, error } = await supabase
+        .from('company_settings')
+        .upsert({ id: 1, ...toSettings(settingsData) }) // Use upsert with a fixed ID
+        .select()
+        .single();
+    return fromSettings(handleSupabaseError({ data, error }, 'update settings'));
+};
+
+export const addInvoice = async (invoiceData: Omit<Invoice, 'id'>): Promise<Invoice> => {
+    const { data, error } = await supabase.from('invoices').insert([toInvoice(invoiceData)]).select().single();
+    return fromInvoice(handleSupabaseError({ data, error }, 'add invoice'));
 };

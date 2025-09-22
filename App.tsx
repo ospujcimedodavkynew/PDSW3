@@ -10,6 +10,8 @@ import Contracts from './pages/Contracts';
 import HandoverProtocols from './pages/HandoverProtocols';
 import Financials from './pages/Financials';
 import Reports from './pages/Reports';
+import Invoices from './pages/Invoices';
+import Settings from './pages/Settings';
 import Login from './pages/Login';
 import CustomerPortal from './pages/CustomerPortal';
 import OnlineBooking from './pages/OnlineBooking';
@@ -51,6 +53,8 @@ const AppContent: React.FC = () => {
             case Page.HANDOVER_PROTOCOLS: return <HandoverProtocols />;
             case Page.FINANCIALS: return <Financials />;
             case Page.REPORTS: return <Reports />;
+            case Page.INVOICES: return <Invoices />;
+            case Page.SETTINGS: return <Settings />;
             default: return <Dashboard setCurrentPage={setCurrentPage} />;
         }
     };

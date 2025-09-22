@@ -1,6 +1,6 @@
 import React from 'react';
 import { Page } from '../types';
-import { LayoutDashboard, Car, Users, FileText, DollarSign, LogOut, Calendar, ClipboardList, BarChart, ClipboardCheck } from 'lucide-react';
+import { LayoutDashboard, Car, Users, FileText, DollarSign, LogOut, Calendar, ClipboardList, BarChart, ClipboardCheck, Receipt, Settings } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 
 interface SidebarProps {
@@ -20,9 +20,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage }) => {
         { page: Page.CONTRACTS, label: 'Smlouvy', icon: FileText },
         { page: Page.HANDOVER_PROTOCOLS, label: 'Předávací protokoly', icon: ClipboardCheck },
         { page: Page.FINANCIALS, label: 'Finance', icon: DollarSign },
+        { page: Page.INVOICES, label: 'Fakturace', icon: Receipt },
         { page: Page.REPORTS, label: 'Reporty', icon: BarChart },
     ];
     
+    const settingsItem = { page: Page.SETTINGS, label: 'Nastavení', icon: Settings };
+
     const handleSignOut = async () => {
         try {
             await actions.signOut();
@@ -55,8 +58,19 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage }) => {
                 ))}
             </nav>
 
-            {/* Logout Button */}
+            {/* Settings and Logout Buttons */}
             <div className="px-4 py-4 border-t border-blue-800 flex-shrink-0">
+                 <button
+                    onClick={() => setCurrentPage(settingsItem.page)}
+                    className={`w-full flex items-center px-4 py-3 my-1 rounded-lg transition-colors duration-200 ${
+                        currentPage === settingsItem.page
+                            ? 'bg-blue-700 text-white'
+                            : 'text-blue-200 hover:bg-blue-800 hover:text-white'
+                    }`}
+                >
+                    <Settings className="w-5 h-5 mr-3" />
+                    <span className="font-medium">{settingsItem.label}</span>
+                </button>
                  <button
                     onClick={handleSignOut}
                     className="w-full flex items-center px-4 py-3 rounded-lg text-blue-200 hover:bg-blue-800 hover:text-white transition-colors duration-200"

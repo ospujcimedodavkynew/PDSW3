@@ -8,6 +8,8 @@ export enum Page {
     HANDOVER_PROTOCOLS = 'HANDOVER_PROTOCOLS',
     FINANCIALS = 'FINANCIALS',
     REPORTS = 'REPORTS',
+    INVOICES = 'INVOICES',
+    SETTINGS = 'SETTINGS',
 }
 
 export interface Vehicle {
@@ -117,4 +119,34 @@ export interface VehicleDamage {
     status: 'reported' | 'repaired';
     // Expanded property
     reservation?: Reservation;
+}
+
+export interface CompanySettings {
+    id: number; // Assuming a single row with a fixed ID
+    companyName: string;
+    address: string;
+    ico: string;
+    dic: string;
+    bankAccount: string;
+    iban: string;
+    swift: string;
+    contactEmail: string;
+    contactPhone: string;
+}
+
+export interface Invoice {
+    id: string;
+    invoiceNumber: string;
+    contractId: string;
+    customerId: string;
+    issueDate: Date | string;
+    dueDate: Date | string;
+    paymentMethod: 'cash' | 'transfer';
+    totalAmount: number;
+    status: 'unpaid' | 'paid' | 'overdue';
+    supplierJson: CompanySettings; // Snapshot of supplier details
+    customerJson: Customer; // Snapshot of customer details
+    // Expanded properties
+    customer?: Customer;
+    contract?: Contract;
 }
