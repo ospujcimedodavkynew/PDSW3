@@ -21,22 +21,28 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, ve
         vignetteExpiry: '', stkExpiry: '',
     };
 
-    const [formData, setFormData] = useState<Partial<Vehicle>>(getInitialData(vehicle));
+    // FIX: A helper function to ensure date values from the 'Vehicle' type are always 
+    // converted to 'YYYY-MM-DD' strings, which is required by the <input type="date"> element.
+    const formatDataForForm = (data: Partial<Vehicle>) => {
+        const formatDate = (date: any): string => date ? new Date(date).toISOString().split('T')[0] : '';
+        return {
+            ...data,
+            insuranceDueDatePov: formatDate(data.insuranceDueDatePov),
+            insuranceDueDateHav: formatDate(data.insuranceDueDateHav),
+            vignetteExpiry: formatDate(data.vignetteExpiry),
+            stkExpiry: formatDate(data.stkExpiry),
+        };
+    };
+
+    // FIX: The form state is now initialized with date strings from the start, preventing a type mismatch on the initial render.
+    const [formData, setFormData] = useState(formatDataForForm(getInitialData(vehicle)));
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (isOpen) {
-            const initialData = getInitialData(vehicle);
-            // Format dates for input[type=date] which expects YYYY-MM-DD
-            const formatDate = (date: any) => date ? new Date(date).toISOString().split('T')[0] : '';
-            setFormData({
-                ...initialData,
-                insuranceDueDatePov: formatDate(initialData.insuranceDueDatePov),
-                insuranceDueDateHav: formatDate(initialData.insuranceDueDateHav),
-                vignetteExpiry: formatDate(initialData.vignetteExpiry),
-                stkExpiry: formatDate(initialData.stkExpiry),
-            });
+            // FIX: Re-initialize and format the form data when the modal opens or the vehicle data changes.
+            setFormData(formatDataForForm(getInitialData(vehicle)));
             setError(null);
         }
     }, [vehicle, isOpen]);
