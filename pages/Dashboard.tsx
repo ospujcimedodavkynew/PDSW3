@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Reservation, Vehicle, Page, VehicleService } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { Car, Users, CalendarCheck, AlertTriangle, Link, ArrowRightLeft, Wrench, Phone, ArrowUpCircle, ArrowDownCircle, Bell, CalendarClock, Settings } from 'lucide-react';
+import { Car, Users, CalendarCheck, AlertTriangle, Link, ArrowRightLeft, Wrench, Phone, ArrowUpCircle, ArrowDownCircle, Bell, CalendarClock, Settings, ShieldCheck, Ticket, CreditCard } from 'lucide-react';
 import ReservationDetailModal from '../components/ReservationDetailModal';
 import SelfServiceModal from '../components/SelfServiceModal';
 import ApprovalModal from '../components/ApprovalModal';
@@ -19,18 +19,39 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
     const [isSelfServiceModalOpen, setIsSelfServiceModalOpen] = useState(false);
     const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
 
-
-    const serviceAlerts = useMemo(() => {
+    const upcomingEvents = useMemo(() => {
         const today = new Date();
         const thirtyDaysFromNow = new Date();
         thirtyDaysFromNow.setDate(today.getDate() + 30);
 
-        return services.filter(s => 
-            s.status === 'planned' &&
-            new Date(s.serviceDate) > today &&
-            new Date(s.serviceDate) <= thirtyDaysFromNow
-        );
-    }, [services]);
+        const events = [];
+
+        // Planned services
+        services.forEach(s => {
+            if (s.status === 'planned' && new Date(s.serviceDate) > today && new Date(s.serviceDate) <= thirtyDaysFromNow) {
+                events.push({ type: 'service' as const, vehicle: s.vehicle, date: s.serviceDate, description: s.description });
+            }
+        });
+
+        // STK, Vignette, Insurance
+        vehicles.forEach(v => {
+            if (v.stkExpiry && new Date(v.stkExpiry) > today && new Date(v.stkExpiry) <= thirtyDaysFromNow) {
+                events.push({ type: 'stk' as const, vehicle: v, date: v.stkExpiry, description: `Končí platnost STK` });
+            }
+            if (v.vignetteExpiry && new Date(v.vignetteExpiry) > today && new Date(v.vignetteExpiry) <= thirtyDaysFromNow) {
+                events.push({ type: 'vignette' as const, vehicle: v, date: v.vignetteExpiry, description: `Končí platnost dálniční známky` });
+            }
+            if (v.insuranceDueDatePov && new Date(v.insuranceDueDatePov) > today && new Date(v.insuranceDueDatePov) <= thirtyDaysFromNow) {
+                events.push({ type: 'insurance' as const, vehicle: v, date: v.insuranceDueDatePov, description: `Splatnost povinného ručení` });
+            }
+            if (v.insuranceDueDateHav && new Date(v.insuranceDueDateHav) > today && new Date(v.insuranceDueDateHav) <= thirtyDaysFromNow) {
+                events.push({ type: 'insurance' as const, vehicle: v, date: v.insuranceDueDateHav, description: `Splatnost havarijního pojištění` });
+            }
+        });
+
+        return events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }, [services, vehicles]);
+
 
     const vehicleStatusData = [
         { name: 'K dispozici', value: vehicles.filter(v => v.status === 'available').length },
@@ -66,16 +87,18 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
             .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
     }, [reservations]);
     
+    // FIX: Replaced `reduce` with a more type-safe `for...of` loop to avoid type inference issues.
     const groupedFutureRentals = useMemo(() => {
-        return futureRentals.reduce((acc, rental) => {
+        const groups: Record<string, Reservation[]> = {};
+        for (const rental of futureRentals) {
             const rentalDate = new Date(rental.startDate);
             const dateKey = rentalDate.toISOString().split('T')[0]; // YYYY-MM-DD
-            if (!acc[dateKey]) {
-                acc[dateKey] = [];
+            if (!groups[dateKey]) {
+                groups[dateKey] = [];
             }
-            acc[dateKey].push(rental);
-            return acc;
-        }, {} as Record<string, Reservation[]>);
+            groups[dateKey].push(rental);
+        }
+        return groups;
     }, [futureRentals]);
 
     const maintenanceVehicles = vehicles.filter(v => v.status === 'maintenance');
@@ -101,7 +124,7 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
 
     if (loading && vehicles.length === 0) return <div>Načítání přehledu...</div>;
     
-    const hasAlerts = maintenanceVehicles.length > 0 || serviceAlerts.length > 0;
+    const hasAlerts = maintenanceVehicles.length > 0 || upcomingEvents.length > 0;
     
     const getReturnStatus = (endDate: Date | string) => {
         const now = new Date();
@@ -142,6 +165,13 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
             return `Zítra, ${rentalDate.toLocaleDateString('cs-CZ', { day: 'numeric', month: 'long', year: 'numeric' })}`;
         }
         return rentalDate.toLocaleDateString('cs-CZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    };
+    
+    const alertIcons = {
+        service: <Wrench className="w-4 h-4 mr-2 mt-1 text-yellow-600 flex-shrink-0"/>,
+        stk: <ShieldCheck className="w-4 h-4 mr-2 mt-1 text-red-600 flex-shrink-0"/>,
+        vignette: <Ticket className="w-4 h-4 mr-2 mt-1 text-blue-600 flex-shrink-0"/>,
+        insurance: <CreditCard className="w-4 h-4 mr-2 mt-1 text-orange-600 flex-shrink-0"/>,
     };
 
     return (
@@ -185,7 +215,24 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                 </div>
                  <div className="bg-white p-6 rounded-lg shadow-md">
                     <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center"><AlertTriangle className="mr-2 text-red-500"/>Upozornění</h2>
-                    {hasAlerts ? (<ul className="space-y-3">{maintenanceVehicles.map(v => (<li key={v.id} className="text-gray-600 flex items-start"><Car className="w-4 h-4 mr-2 mt-1 text-red-500 flex-shrink-0"/><span><span className="font-semibold">{v.name}</span> je v servisu.</span></li>))}{serviceAlerts.map(s => (<li key={s.id} className="text-gray-600 flex items-start"><Wrench className="w-4 h-4 mr-2 mt-1 text-yellow-600 flex-shrink-0"/><span><span className="font-semibold">{s.vehicle?.name}:</span> Plánovaný servis ({s.description}) dne {new Date(s.serviceDate).toLocaleDateString('cs-CZ')}.</span></li>))}</ul>) : <p className="text-gray-500">Žádná důležitá upozornění.</p>}
+                    {hasAlerts ? (
+                        <ul className="space-y-3">
+                            {maintenanceVehicles.map(v => (
+                                <li key={v.id} className="text-gray-600 flex items-start">
+                                    <Car className="w-4 h-4 mr-2 mt-1 text-red-500 flex-shrink-0"/>
+                                    <span><span className="font-semibold">{v.name}</span> je v servisu.</span>
+                                </li>
+                            ))}
+                            {upcomingEvents.map((event, index) => (
+                                <li key={index} className="text-gray-600 flex items-start">
+                                    {alertIcons[event.type]}
+                                    <span>
+                                        <span className="font-semibold">{event.vehicle?.name}:</span> {event.description} dne {new Date(event.date).toLocaleDateString('cs-CZ')}.
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : <p className="text-gray-500">Žádná důležitá upozornění.</p>}
                 </div>
             </div>
             

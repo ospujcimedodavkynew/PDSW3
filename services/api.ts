@@ -20,16 +20,45 @@ const fromVehicle = (v: any): Vehicle => v && ({
     currentMileage: v.current_mileage,
     description: v.description,
     dimensions: v.dimensions,
+    insuranceProviderPov: v.insurance_provider_pov,
+    insurancePolicyNumberPov: v.insurance_policy_number_pov,
+    insuranceCostPov: v.insurance_cost_pov,
+    insuranceIntervalPov: v.insurance_interval_pov,
+    insuranceDueDatePov: v.insurance_due_date_pov,
+    insuranceProviderHav: v.insurance_provider_hav,
+    insurancePolicyNumberHav: v.insurance_policy_number_hav,
+    insuranceCostHav: v.insurance_cost_hav,
+    insuranceIntervalHav: v.insurance_interval_hav,
+    insuranceDueDateHav: v.insurance_due_date_hav,
+    vignetteExpiry: v.vignette_expiry,
+    stkExpiry: v.stk_expiry,
 });
 
 const toVehicle = (v: Partial<Vehicle>) => {
-    const { licensePlate, imageUrl, dailyRate, currentMileage, ...rest } = v;
+    const { 
+        licensePlate, imageUrl, dailyRate, currentMileage, 
+        insuranceProviderPov, insurancePolicyNumberPov, insuranceCostPov, insuranceIntervalPov, insuranceDueDatePov,
+        insuranceProviderHav, insurancePolicyNumberHav, insuranceCostHav, insuranceIntervalHav, insuranceDueDateHav,
+        vignetteExpiry, stkExpiry, ...rest 
+    } = v;
     const payload = {
         ...rest,
         license_plate: licensePlate,
         image_url: imageUrl,
         daily_rate: dailyRate,
         current_mileage: currentMileage,
+        insurance_provider_pov: insuranceProviderPov,
+        insurance_policy_number_pov: insurancePolicyNumberPov,
+        insurance_cost_pov: insuranceCostPov,
+        insurance_interval_pov: insuranceIntervalPov,
+        insurance_due_date_pov: insuranceDueDatePov,
+        insurance_provider_hav: insuranceProviderHav,
+        insurance_policy_number_hav: insurancePolicyNumberHav,
+        insurance_cost_hav: insuranceCostHav,
+        insurance_interval_hav: insuranceIntervalHav,
+        insurance_due_date_hav: insuranceDueDateHav,
+        vignette_expiry: vignetteExpiry,
+        stk_expiry: stkExpiry,
     };
     Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
     return payload;

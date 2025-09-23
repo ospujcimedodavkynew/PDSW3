@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import type { Vehicle } from '../types';
-import { Wrench, ShieldAlert, Plus, Edit, Search } from 'lucide-react';
+import { Wrench, ShieldAlert, Plus, Edit, Search, Calendar } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import ServiceHistoryModal from '../components/ServiceHistoryModal';
 import DamageHistoryModal from '../components/DamageHistoryModal';
@@ -18,6 +18,18 @@ const VehicleCard: React.FC<{
         rented: { text: 'Pronajato', color: 'bg-yellow-500' },
         maintenance: { text: 'V servisu', color: 'bg-red-500' },
     };
+
+    const stkStatus = useMemo(() => {
+        if (!vehicle.stkExpiry) return null;
+        const now = new Date();
+        const expiry = new Date(vehicle.stkExpiry);
+        const diffDays = (expiry.getTime() - now.getTime()) / (1000 * 3600 * 24);
+
+        if (diffDays <= 0) return { text: 'STK propadlá', color: 'text-red-600 font-bold' };
+        if (diffDays <= 30) return { text: `STK končí za ${Math.ceil(diffDays)} dní`, color: 'text-red-600 font-semibold' };
+        if (diffDays <= 60) return { text: `STK do: ${expiry.toLocaleDateString('cs-CZ')}`, color: 'text-yellow-600' };
+        return { text: `STK do: ${expiry.toLocaleDateString('cs-CZ')}`, color: 'text-gray-500' };
+    }, [vehicle.stkExpiry]);
     
     return (
         <div className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col">
@@ -30,7 +42,14 @@ const VehicleCard: React.FC<{
                     </span>
                 </div>
                 <p className="text-gray-600">{vehicle.licensePlate} &bull; {vehicle.year}</p>
-                <p className="text-sm text-gray-500 mt-1">{vehicle.currentMileage.toLocaleString('cs-CZ')} km</p>
+                <div className="flex justify-between items-center mt-1">
+                    <p className="text-sm text-gray-500">{vehicle.currentMileage.toLocaleString('cs-CZ')} km</p>
+                    {stkStatus && (
+                        <p className={`text-xs flex items-center ${stkStatus.color}`}>
+                            <Calendar className="w-3 h-3 mr-1" /> {stkStatus.text}
+                        </p>
+                    )}
+                </div>
                 
                 <div className="mt-4 pt-4 border-t flex-grow">
                     <p className="text-sm">4h: <span className="font-bold">{vehicle.rate4h} Kč</span></p>

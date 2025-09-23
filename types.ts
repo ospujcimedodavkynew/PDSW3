@@ -28,6 +28,19 @@ export interface Vehicle {
     currentMileage: number;
     description?: string;
     dimensions?: string;
+    // Insurance and validity fields
+    insuranceProviderPov?: string;
+    insurancePolicyNumberPov?: string;
+    insuranceCostPov?: number;
+    insuranceIntervalPov?: 'yearly' | 'half-yearly';
+    insuranceDueDatePov?: Date | string;
+    insuranceProviderHav?: string;
+    insurancePolicyNumberHav?: string;
+    insuranceCostHav?: number;
+    insuranceIntervalHav?: 'yearly' | 'half-yearly';
+    insuranceDueDateHav?: Date | string;
+    vignetteExpiry?: Date | string;
+    stkExpiry?: Date | string;
 }
 
 export interface Customer {
