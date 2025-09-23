@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import * as api from '../services/api';
-import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage, HandoverProtocol, CompanySettings, Invoice, Page } from '../types';
+import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage, HandoverProtocol, CompanySettings, Invoice } from '../types';
 import { Session, RealtimeChannel } from '@supabase/supabase-js';
 
 
@@ -36,7 +36,7 @@ interface DataContextActions {
     rejectReservation: (reservationId: string) => Promise<void>;
     activateReservation: (reservationId: string, startMileage: number) => Promise<void>;
     completeReservation: (reservationId: string, endMileage: number, protocolData: ProtocolData) => Promise<void>;
-    addContract: (contractData: Omit<Contract, 'id'>) => Promise<Contract>;
+    addContract: (contractData: Omit<Contract, 'id'>) => Promise<void>;
     addExpense: (expenseData: { description: string; amount: number; date: Date; }) => Promise<void>;
     addService: (serviceData: Omit<VehicleService, 'id'>) => Promise<void>;
     updateService: (serviceId: string, updates: Partial<VehicleService>) => Promise<void>;
@@ -44,10 +44,6 @@ interface DataContextActions {
     createOnlineReservation: (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>) => Promise<void>;
     updateSettings: (settingsData: Omit<CompanySettings, 'id'>) => Promise<void>;
     addInvoice: (invoiceData: Omit<Invoice, 'id'>) => Promise<Invoice>;
-    // Navigation actions
-    setCurrentPage: (page: Page) => void;
-    navigateToDetail: (page: Page, id: string) => void;
-    clearViewingId: () => void;
 }
 
 interface DataContextState {
@@ -55,8 +51,6 @@ interface DataContextState {
     loading: boolean;
     actions: DataContextActions;
     session: Session | null;
-    currentPage: Page;
-    viewingId: string | null;
 }
 
 const DataContext = createContext<DataContextState | undefined>(undefined);
@@ -122,10 +116,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [session, setSession] = useState<Session | null>(null);
     const [authLoading, setAuthLoading] = useState(true);
     const [dataLoading, setDataLoading] = useState(true);
-    
-    // Navigation state
-    const [currentPage, setCurrentPage] = useState<Page>(Page.DASHBOARD);
-    const [viewingId, setViewingId] = useState<string | null>(null);
 
     useEffect(() => {
         api.getSession().then(({ data: { session } }) => {
@@ -182,12 +172,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const actions = useMemo((): DataContextActions => ({
         refreshData,
         signOut: api.signOut,
-        setCurrentPage,
-        navigateToDetail: (page, id) => {
-            setViewingId(id);
-            setCurrentPage(page);
-        },
-        clearViewingId: () => setViewingId(null),
         addCustomer: async (customerData) => {
             const newCustomer = await api.addCustomer(customerData);
             setData(prev => expandData({ ...prev, customers: [...prev.customers, newCustomer] }));
@@ -280,7 +264,7 @@ Telefon: ${customerForContract.phone}
 Článek III. - Doba nájmu a cena
 -----------------------------------------
 1. Doba nájmu je sjednána od: ${new Date(reservation.startDate).toLocaleString('cs-CZ')} do: ${new Date(reservation.endDate).toLocaleString('cs-CZ')}.
-2. Celková cena nájmu činí: ${rentalPrice.toLocaleString('cs-CZ')} Kč. Cena je splatná při převzetí vozidla, není-li dohodnutu jinak.
+2. Celková cena nájmu činí: ${rentalPrice.toLocaleString('cs-CZ')} Kč. Cena je splatná při převzetí vozidla, není-li dohodnuto jinak.
 3. Nájemce bere na vědomí, že denní limit pro nájezd je 300 km. Za každý kilometr nad tento limit (vypočtený jako 300 km * počet dní pronájmu) bude účtován poplatek 3 Kč/km.
    Počáteční stav kilometrů: ${(startMileage).toLocaleString('cs-CZ')} km.
 
@@ -303,7 +287,7 @@ Telefon: ${customerForContract.phone}
 1. V případě poškození předmětu nájmu zaviněného nájemcem, nebo v případě odcizení, se sjednává spoluúčast nájemce na vzniklé škodě.
 2. Výše spoluúčasti činí 5.000 Kč při poškození pronajatého vozidla.
 3. V případě dopravní nehody, při které dojde k poškození jiných vozidel nebo majetku třetích stran, činí spoluúčast 10.000 Kč.
-4. Nájemce je povinen každou dopravní nehodu, poškození vozidla nebo jeho odcizení neprodloženě ohlásit pronajímateli a Policii ČR.
+4. Nájemce je povinen každou dopravní nehodu, poškození vozidla nebo jeho odcizení neprodleně ohlásit pronajímateli a Policii ČR.
 
 Článek VII. - Závěrečná ustanovení
 -----------------------------------------
@@ -411,7 +395,6 @@ Zákazník digitálně odsouhlasil obsah tohoto protokolu dne ${new Date().toLoc
         addContract: async (contractData) => {
              const newContract = await api.addContract(contractData);
              setData(prev => expandData({ ...prev, contracts: [...prev.contracts, newContract] }));
-             return newContract;
         },
         addExpense: async (expenseData) => {
             const newExpense = await api.addFinancialTransaction({ ...expenseData, type: 'expense' });
@@ -447,14 +430,7 @@ Zákazník digitálně odsouhlasil obsah tohoto protokolu dne ${new Date().toLoc
         },
     }), [data, refreshData]);
 
-    const value: DataContextState = { 
-        data, 
-        loading: authLoading || (!!session && dataLoading), 
-        actions, 
-        session,
-        currentPage,
-        viewingId,
-    };
+    const value = { data, loading: authLoading || (!!session && dataLoading), actions, session };
 
     return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };

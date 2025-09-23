@@ -1,25 +1,13 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { Contract } from '../types';
 import { useData } from '../contexts/DataContext';
-import { Search, CheckCircle, Copy, Mail } from 'lucide-react';
+import { Search } from 'lucide-react';
 
 const Contracts: React.FC = () => {
-    const { data, loading, viewingId, actions } = useData();
+    const { data, loading } = useData();
     const { contracts } = data;
     const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [showSuccessBanner, setShowSuccessBanner] = useState(false);
-
-    useEffect(() => {
-        if (viewingId) {
-            const contractToView = contracts.find(c => c.id === viewingId);
-            if (contractToView) {
-                setSelectedContract(contractToView);
-                setShowSuccessBanner(true);
-            }
-            actions.clearViewingId();
-        }
-    }, [viewingId, contracts, actions]);
 
     const filteredContracts = useMemo(() => {
         return contracts.filter(contract => {
@@ -36,27 +24,9 @@ const Contracts: React.FC = () => {
         });
     }, [contracts, searchTerm]);
 
-    const handleBackToList = () => {
-        setSelectedContract(null);
-        setShowSuccessBanner(false);
-    };
-    
-    const handleCopy = (text: string, setStatus: React.Dispatch<React.SetStateAction<string>>, successMessage: string, originalMessage: string) => {
-        navigator.clipboard.writeText(text).then(() => {
-            setStatus(successMessage);
-            setTimeout(() => setStatus(originalMessage), 2000);
-        }).catch(err => {
-            alert('Nepodařilo se zkopírovat text.');
-            console.error(err);
-        });
-    };
-
     if (loading && contracts.length === 0) return <div>Načítání smluv...</div>;
     
     if (selectedContract) {
-        const [copyTextStatus, setCopyTextStatus] = useState('Kopírovat text smlouvy');
-        const [copyEmailStatus, setCopyEmailStatus] = useState('Kopírovat e-mail zákazníka');
-
         return (
             <div className="bg-white p-8 rounded-lg shadow-lg">
                 <div className="flex justify-between items-start mb-6">
@@ -64,36 +34,8 @@ const Contracts: React.FC = () => {
                         <h2 className="text-2xl font-bold">Detail Smlouvy</h2>
                         <p className="text-gray-500">Číslo: {selectedContract.id}</p>
                     </div>
-                    <button onClick={handleBackToList} className="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">
-                        Zpět na seznam
-                    </button>
+                    <button onClick={() => setSelectedContract(null)} className="text-gray-500 hover:text-gray-800 text-2xl font-bold">&times;</button>
                 </div>
-
-                {showSuccessBanner && (
-                    <div className="bg-green-50 border border-green-200 text-green-800 p-4 rounded-lg mb-6 flex flex-col sm:flex-row items-center gap-4">
-                        <CheckCircle className="w-10 h-10 text-green-500 flex-shrink-0" />
-                        <div className="flex-grow text-center sm:text-left">
-                            <h3 className="font-bold">Smlouva byla úspěšně vytvořena!</h3>
-                            <p className="text-sm">Nyní ji můžete snadno odeslat zákazníkovi.</p>
-                        </div>
-                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                             <button
-                                onClick={() => handleCopy(selectedContract.contractText, setCopyTextStatus, 'Zkopírováno!', 'Kopírovat text smlouvy')}
-                                className={`w-full flex items-center justify-center py-2 px-3 rounded-lg font-semibold transition-colors text-sm ${copyTextStatus.includes('!') ? 'bg-green-600 text-white' : 'bg-green-200 hover:bg-green-300'}`}
-                            >
-                                <Copy className="w-4 h-4 mr-2" /> {copyTextStatus}
-                            </button>
-                            {selectedContract.customer?.email && (
-                                <button
-                                    onClick={() => handleCopy(selectedContract.customer!.email, setCopyEmailStatus, 'Zkopírováno!', 'Kopírovat e-mail')}
-                                    className={`w-full flex items-center justify-center py-2 px-3 rounded-lg font-semibold transition-colors text-sm ${copyEmailStatus.includes('!') ? 'bg-green-600 text-white' : 'bg-green-200 hover:bg-green-300'}`}
-                                >
-                                    <Mail className="w-4 h-4 mr-2" /> {copyEmailStatus}
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                )}
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     {selectedContract.customer && (
