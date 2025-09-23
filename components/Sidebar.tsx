@@ -3,13 +3,8 @@ import { Page } from '../types';
 import { LayoutDashboard, Car, Users, FileText, DollarSign, LogOut, Calendar, ClipboardList, BarChart, ClipboardCheck, Receipt, Settings } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 
-interface SidebarProps {
-    currentPage: Page;
-    setCurrentPage: (page: Page) => void;
-}
-
-const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage }) => {
-    const { actions } = useData();
+const Sidebar: React.FC = () => {
+    const { actions, currentPage } = useData();
 
     const navItems = [
         { page: Page.DASHBOARD, label: 'Přehled', icon: LayoutDashboard },
@@ -45,7 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage }) => {
                 {navItems.map(({ page, label, icon: Icon }) => (
                     <button
                         key={page}
-                        onClick={() => setCurrentPage(page)}
+                        onClick={() => actions.setCurrentPage(page)}
                         className={`w-full flex items-center px-4 py-3 my-1 rounded-lg transition-colors duration-200 ${
                             currentPage === page
                                 ? 'bg-blue-700 text-white'
@@ -61,7 +56,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage }) => {
             {/* Settings and Logout Buttons */}
             <div className="px-4 py-4 border-t border-blue-800 flex-shrink-0">
                  <button
-                    onClick={() => setCurrentPage(settingsItem.page)}
+                    onClick={() => actions.setCurrentPage(settingsItem.page)}
                     className={`w-full flex items-center px-4 py-3 my-1 rounded-lg transition-colors duration-200 ${
                         currentPage === settingsItem.page
                             ? 'bg-blue-700 text-white'

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { DataProvider, useData } from './contexts/DataContext';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
@@ -19,8 +19,7 @@ import { Page } from './types';
 import { Loader } from 'lucide-react';
 
 const AppContent: React.FC = () => {
-    const { session, loading } = useData();
-    const [currentPage, setCurrentPage] = useState<Page>(Page.DASHBOARD);
+    const { session, loading, currentPage } = useData();
     
     const urlParams = new URLSearchParams(window.location.search);
     const portalToken = urlParams.get('portal');
@@ -44,7 +43,7 @@ const AppContent: React.FC = () => {
     
     const renderPage = () => {
         switch (currentPage) {
-            case Page.DASHBOARD: return <Dashboard setCurrentPage={setCurrentPage} />;
+            case Page.DASHBOARD: return <Dashboard />;
             case Page.RESERVATIONS: return <Reservations />;
             case Page.CALENDAR: return <Calendar />;
             case Page.VEHICLES: return <Vehicles />;
@@ -55,13 +54,13 @@ const AppContent: React.FC = () => {
             case Page.REPORTS: return <Reports />;
             case Page.INVOICES: return <Invoices />;
             case Page.SETTINGS: return <Settings />;
-            default: return <Dashboard setCurrentPage={setCurrentPage} />;
+            default: return <Dashboard />;
         }
     };
 
     return (
         <div className="flex h-screen bg-light-bg">
-            <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
+            <Sidebar />
             <main className="flex-1 p-6 overflow-y-auto">
                 {renderPage()}
             </main>

@@ -10,7 +10,7 @@ import { useData } from '../contexts/DataContext';
 
 const COLORS = { available: '#22C55E', rented: '#F59E0B', maintenance: '#EF4444' };
 
-const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurrentPage }) => {
+const Dashboard: React.FC = () => {
     const { data, loading, actions } = useData();
     const { vehicles, reservations, services } = data;
 
@@ -154,8 +154,8 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                 <h1 className="text-3xl font-bold text-gray-800">Přehled</h1>
                 <div className="flex space-x-3">
                      <button onClick={() => setIsSelfServiceModalOpen(true)} className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center"><Link className="w-5 h-5 mr-2" /> Vytvořit samoobslužnou rezervaci</button>
-                    <button onClick={() => setCurrentPage(Page.CUSTOMERS)} className="bg-gray-200 text-dark-text font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors flex items-center"><Users className="w-5 h-5 mr-2" /> Nový zákazník</button>
-                    <button onClick={() => setCurrentPage(Page.RESERVATIONS)} className="bg-secondary text-dark-text font-bold py-2 px-4 rounded-lg hover:bg-secondary-hover transition-colors flex items-center"><CalendarCheck className="w-5 h-5 mr-2" /> Nová rezervace</button>
+                    <button onClick={() => actions.setCurrentPage(Page.CUSTOMERS)} className="bg-gray-200 text-dark-text font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors flex items-center"><Users className="w-5 h-5 mr-2" /> Nový zákazník</button>
+                    <button onClick={() => actions.setCurrentPage(Page.RESERVATIONS)} className="bg-secondary text-dark-text font-bold py-2 px-4 rounded-lg hover:bg-secondary-hover transition-colors flex items-center"><CalendarCheck className="w-5 h-5 mr-2" /> Nová rezervace</button>
                 </div>
             </div>
 
