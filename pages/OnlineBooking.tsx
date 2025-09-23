@@ -181,8 +181,20 @@ const OnlineBooking: React.FC = () => {
             await actions.createOnlineReservation(selectedVehicleId, startDateObj, endDateObj, customerData);
             setIsSubmitted(true);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Rezervaci se nepodařilo vytvořit.');
-        } finally { setIsProcessing(false); }
+            // --- FIX: Robust error message extraction ---
+            let errorMessage = 'Rezervaci se nepodařilo vytvořit. Zkuste to prosím znovu.';
+            if (err instanceof Error) {
+                errorMessage = err.message;
+            } else if (typeof err === 'object' && err !== null && 'message' in err && typeof (err as any).message === 'string') {
+                // Handle Supabase error objects or other similar error structures
+                errorMessage = (err as { message: string }).message;
+            } else if (typeof err === 'string') {
+                errorMessage = err;
+            }
+            setError(errorMessage);
+        } finally { 
+            setIsProcessing(false); 
+        }
     };
     
     if (pageLoading) {
