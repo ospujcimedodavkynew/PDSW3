@@ -4,6 +4,7 @@ import { Wrench, ShieldAlert, Plus, Edit, Search, Calendar } from 'lucide-react'
 import { useData } from '../contexts/DataContext';
 import ServiceHistoryModal from '../components/ServiceHistoryModal';
 import DamageHistoryModal from '../components/DamageHistoryModal';
+import VehicleFormModal from '../components/VehicleFormModal';
 
 const VehicleCard: React.FC<{
     vehicle: Vehicle;
@@ -74,13 +75,14 @@ const VehicleCard: React.FC<{
 
 
 const Vehicles: React.FC = () => {
-    const { data, loading, actions } = useData();
+    const { data, loading } = useData();
     const { vehicles } = data;
     
     const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
     const [isDamageModalOpen, setIsDamageModalOpen] = useState(false);
+    const [isVehicleFormModalOpen, setIsVehicleFormModalOpen] = useState(false);
     
-    const [selectedVehicleForHistory, setSelectedVehicleForHistory] = useState<Vehicle | null>(null);
+    const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | Vehicle['status']>('all');
 
@@ -98,19 +100,25 @@ const Vehicles: React.FC = () => {
     }, [vehicles, searchTerm, statusFilter]);
 
     const handleShowServiceHistory = (vehicle: Vehicle) => {
-        setSelectedVehicleForHistory(vehicle);
+        setSelectedVehicle(vehicle);
         setIsServiceModalOpen(true);
     };
     
     const handleShowDamageHistory = (vehicle: Vehicle) => {
-        setSelectedVehicleForHistory(vehicle);
+        setSelectedVehicle(vehicle);
         setIsDamageModalOpen(true);
     };
 
-    const handleCloseHistoryModals = () => {
+    const handleOpenVehicleForm = (vehicle: Vehicle | null = null) => {
+        setSelectedVehicle(vehicle);
+        setIsVehicleFormModalOpen(true);
+    };
+
+    const handleCloseModals = () => {
         setIsServiceModalOpen(false);
         setIsDamageModalOpen(false);
-        setSelectedVehicleForHistory(null);
+        setIsVehicleFormModalOpen(false);
+        setSelectedVehicle(null);
     };
 
     if (loading && vehicles.length === 0) return <div>Načítání vozového parku...</div>;
@@ -124,12 +132,13 @@ const Vehicles: React.FC = () => {
 
     return (
         <div>
-            <ServiceHistoryModal isOpen={isServiceModalOpen} onClose={handleCloseHistoryModals} vehicle={selectedVehicleForHistory} />
-            <DamageHistoryModal isOpen={isDamageModalOpen} onClose={handleCloseHistoryModals} vehicle={selectedVehicleForHistory} />
-            
+            <ServiceHistoryModal isOpen={isServiceModalOpen} onClose={handleCloseModals} vehicle={selectedVehicle} />
+            <DamageHistoryModal isOpen={isDamageModalOpen} onClose={handleCloseModals} vehicle={selectedVehicle} />
+            <VehicleFormModal isOpen={isVehicleFormModalOpen} onClose={handleCloseModals} vehicle={selectedVehicle} />
+
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Vozový park</h1>
-                <button onClick={() => actions.openVehicleFormModal(null)} className="bg-secondary text-dark-text font-bold py-2 px-4 rounded-lg hover:bg-secondary-hover transition-colors flex items-center">
+                <button onClick={() => handleOpenVehicleForm()} className="bg-secondary text-dark-text font-bold py-2 px-4 rounded-lg hover:bg-secondary-hover transition-colors flex items-center">
                     <Plus className="w-5 h-5 mr-2" />
                     Přidat vozidlo
                 </button>
@@ -170,7 +179,7 @@ const Vehicles: React.FC = () => {
                     <VehicleCard 
                         key={vehicle.id} 
                         vehicle={vehicle}
-                        onEdit={actions.openVehicleFormModal}
+                        onEdit={handleOpenVehicleForm}
                         onShowServiceHistory={handleShowServiceHistory}
                         onShowDamageHistory={handleShowDamageHistory}
                     />

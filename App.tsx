@@ -15,12 +15,11 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import CustomerPortal from './pages/CustomerPortal';
 import OnlineBooking from './pages/OnlineBooking';
-import VehicleFormModal from './components/VehicleFormModal';
 import { Page } from './types';
 import { Loader } from 'lucide-react';
 
 const AppContent: React.FC = () => {
-    const { session, loading, isVehicleFormModalOpen, vehicleBeingEdited, actions } = useData();
+    const { session, loading } = useData();
     const [currentPage, setCurrentPage] = useState<Page>(Page.DASHBOARD);
     
     const urlParams = new URLSearchParams(window.location.search);
@@ -66,12 +65,6 @@ const AppContent: React.FC = () => {
             <main className="flex-1 p-6 overflow-y-auto">
                 {renderPage()}
             </main>
-            {/* Render modal globally to persist its state across page navigations */}
-            <VehicleFormModal
-                isOpen={isVehicleFormModalOpen}
-                onClose={actions.closeVehicleFormModal}
-                vehicle={vehicleBeingEdited}
-            />
         </div>
     );
 };
