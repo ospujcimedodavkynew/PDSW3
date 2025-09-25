@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import * as api from '../services/api';
 import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage, HandoverProtocol, CompanySettings, Invoice } from '../types';
-import { Session, RealtimeChannel } from '@supabase/supabase-js';
+// Fix: Use `import type` for Session and RealtimeChannel to resolve module issues.
+import type { Session, RealtimeChannel } from '@supabase/supabase-js';
 
 
 interface AppData {
@@ -303,7 +304,7 @@ Telefon: ${customerForContract.phone}
 1. V případě poškození předmětu nájmu zaviněného nájemcem, nebo v případě odcizení, se sjednává spoluúčast nájemce na vzniklé škodě.
 2. Výše spoluúčasti činí 5.000 Kč při poškození pronajatého vozidla.
 3. V případě dopravní nehody, při které dojde k poškození jiných vozidel nebo majetku třetích stran, činí spoluúčast 10.000 Kč.
-4. Nájemce je povinen každou dopravní nehodu, poškození vozidla nebo jeho odcizení neprodleně ohlásit pronajímateli a Policii ČR.
+4. Nájemce je povinen každou dopravní nehodu, poškození vozidla nebo jeho odcizení neproděleně ohlásit pronajímateli a Policii ČR.
 
 Článek VII. - Závěrečná ustanovení
 -----------------------------------------

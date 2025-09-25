@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
-import { Session, RealtimeChannel } from '@supabase/supabase-js';
+// Fix: Use `import type` for Session and RealtimeChannel to resolve module issues.
+import type { Session, RealtimeChannel } from '@supabase/supabase-js';
 import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage, HandoverProtocol, CompanySettings, Invoice } from '../types';
 
 // --- Mappers: Supabase (snake_case) <-> Application (camelCase) ---
