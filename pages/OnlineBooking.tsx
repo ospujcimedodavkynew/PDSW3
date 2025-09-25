@@ -1,8 +1,7 @@
 import React, { useState, useMemo, FormEvent, useEffect } from 'react';
-import { useData } from '../contexts/DataContext';
 import { Customer, Reservation, Vehicle } from '../types';
 import { CheckCircle, Loader, Clock } from 'lucide-react';
-import { getPublicBookingData } from '../services/api';
+import { getPublicBookingData, createOnlineReservation } from '../services/api';
 
 const PREPARATION_BUFFER_MINUTES = 20;
 
@@ -29,8 +28,6 @@ const parseDateTimeLocal = (dateTimeString: string): Date | null => {
 
 
 const OnlineBooking: React.FC = () => {
-    const { actions } = useData();
-
     const [allVehicles, setAllVehicles] = useState<Vehicle[]>([]);
     const [allReservations, setAllReservations] = useState<Reservation[]>([]);
     const [pageLoading, setPageLoading] = useState(true);
@@ -178,7 +175,7 @@ const OnlineBooking: React.FC = () => {
         }
         setIsProcessing(true);
         try {
-            await actions.createOnlineReservation(selectedVehicleId, startDateObj, endDateObj, customerData);
+            await createOnlineReservation(selectedVehicleId, startDateObj, endDateObj, customerData);
             setIsSubmitted(true);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Rezervaci se nepodařilo vytvořit.');
