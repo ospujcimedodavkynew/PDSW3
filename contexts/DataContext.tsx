@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import * as api from '../services/api';
 import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage, HandoverProtocol, CompanySettings, Invoice } from '../types';
-// Fix: Use `import type` for Session and RealtimeChannel to resolve module issues.
-import type { Session, RealtimeChannel } from '@supabase/supabase-js';
+import { Session, RealtimeChannel } from '@supabase/supabase-js';
 
 
 interface AppData {
@@ -32,8 +31,6 @@ interface DataContextActions {
     updateCustomer: (customerData: Customer) => Promise<void>;
     addVehicle: (vehicleData: Omit<Vehicle, 'id'>) => Promise<Vehicle>;
     updateVehicle: (vehicleData: Vehicle) => Promise<void>;
-    openVehicleFormModal: (vehicle: Partial<Vehicle> | null) => void;
-    closeVehicleFormModal: () => void;
     addReservation: (reservationData: Omit<Reservation, 'id' | 'status'>) => Promise<Reservation>;
     approveReservation: (reservationId: string) => Promise<void>;
     rejectReservation: (reservationId: string) => Promise<void>;
@@ -54,8 +51,6 @@ interface DataContextState {
     loading: boolean;
     actions: DataContextActions;
     session: Session | null;
-    isVehicleFormModalOpen: boolean;
-    vehicleBeingEdited: Partial<Vehicle> | null;
 }
 
 const DataContext = createContext<DataContextState | undefined>(undefined);
@@ -121,10 +116,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [session, setSession] = useState<Session | null>(null);
     const [authLoading, setAuthLoading] = useState(true);
     const [dataLoading, setDataLoading] = useState(true);
-    
-    // State for the global vehicle form modal
-    const [isVehicleFormModalOpen, setIsVehicleFormModalOpen] = useState(false);
-    const [vehicleBeingEdited, setVehicleBeingEdited] = useState<Partial<Vehicle> | null>(null);
 
     useEffect(() => {
         api.getSession().then(({ data: { session } }) => {
@@ -205,14 +196,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 vehicles: prev.vehicles.map(v => v.id === updatedVehicle.id ? updatedVehicle : v)
             }));
         },
-        openVehicleFormModal: useCallback((vehicle: Partial<Vehicle> | null) => {
-            setVehicleBeingEdited(vehicle);
-            setIsVehicleFormModalOpen(true);
-        }, []),
-        closeVehicleFormModal: useCallback(() => {
-            setIsVehicleFormModalOpen(false);
-            setVehicleBeingEdited(null);
-        }, []),
         addReservation: async (resData) => {
             const newReservation = await api.addReservation(resData);
             setData(prev => expandData({ ...prev, reservations: [...prev.reservations, newReservation] }));
@@ -304,7 +287,7 @@ Telefon: ${customerForContract.phone}
 1. V případě poškození předmětu nájmu zaviněného nájemcem, nebo v případě odcizení, se sjednává spoluúčast nájemce na vzniklé škodě.
 2. Výše spoluúčasti činí 5.000 Kč při poškození pronajatého vozidla.
 3. V případě dopravní nehody, při které dojde k poškození jiných vozidel nebo majetku třetích stran, činí spoluúčast 10.000 Kč.
-4. Nájemce je povinen každou dopravní nehodu, poškození vozidla nebo jeho odcizení neproděleně ohlásit pronajímateli a Policii ČR.
+4. Nájemce je povinen každou dopravní nehodu, poškození vozidla nebo jeho odcizení neprodleně ohlásit pronajímateli a Policii ČR.
 
 Článek VII. - Závěrečná ustanovení
 -----------------------------------------
@@ -368,7 +351,7 @@ ${protocolData.notes || 'Žádné.'}
 ---------------------------------
 Nová poškození nahlášená při tomto vrácení jsou zaznamenána samostatně v historii poškození vozidla.
 
---- SOUHLAS ZÁKAZNIKA ---
+--- SOUHLAS ZÁKAZNÍKA ---
 Zákazník digitálně odsouhlasil obsah tohoto protokolu dne ${new Date().toLocaleString('cs-CZ')}.
 `.trim();
 
@@ -447,7 +430,7 @@ Zákazník digitálně odsouhlasil obsah tohoto protokolu dne ${new Date().toLoc
         },
     }), [data, refreshData]);
 
-    const value = { data, loading: authLoading || (!!session && dataLoading), actions, session, isVehicleFormModalOpen, vehicleBeingEdited };
+    const value = { data, loading: authLoading || (!!session && dataLoading), actions, session };
 
     return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };

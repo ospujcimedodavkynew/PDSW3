@@ -38,85 +38,6 @@ const loadDraft = (): ReservationFormData => {
     return initialFormData;
 };
 
-// --- Standalone Confirmation Modal Component ---
-interface ConfirmationModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    contractInfo: { contractText: string; customerEmail: string; vehicleName: string } | null;
-}
-
-const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, contractInfo }) => {
-    const [copyTextStatus, setCopyTextStatus] = useState('Ručně zkopírovat text smlouvy');
-
-    useEffect(() => {
-        if (isOpen) {
-            setCopyTextStatus('Ručně zkopírovat text smlouvy');
-        }
-    }, [isOpen]);
-
-    if (!isOpen || !contractInfo) return null;
-
-    const handleSendMail = () => {
-        const subject = `Smlouva o pronájmu vozidla: ${contractInfo.vehicleName}`;
-        const body = contractInfo.contractText;
-
-        const mailtoLink = `mailto:${contractInfo.customerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-        
-        if (mailtoLink.length > 2000) {
-             alert("Smlouva je příliš dlouhá pro automatické odeslání e-mailem. Prosím, použijte ruční kopírování.");
-             handleManualCopy();
-             return;
-        }
-
-        window.location.href = mailtoLink;
-    };
-
-    const handleManualCopy = () => {
-        navigator.clipboard.writeText(contractInfo.contractText).then(() => {
-            setCopyTextStatus('Zkopírováno!');
-            setTimeout(() => setCopyTextStatus('Ručně zkopírovat text smlouvy'), 2000);
-        }).catch(err => {
-            alert('Nepodařilo se zkopírovat text.');
-            console.error(err);
-        });
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50">
-            <div className="bg-white rounded-lg shadow-2xl p-8 w-full max-w-lg text-center">
-                <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-                <h2 className="text-2xl font-bold mb-2">Rezervace a smlouva vytvořena!</h2>
-                <p className="text-gray-600 mb-6">
-                    Smlouva byla úspěšně uložena. Kliknutím na tlačítko níže otevřete váš e-mailový program s připravenou zprávou pro zákazníka.
-                </p>
-                <div className="space-y-3">
-                    <button
-                        onClick={handleSendMail}
-                        className="w-full flex items-center justify-center py-3 px-4 rounded-lg font-semibold transition-colors bg-primary text-white hover:bg-primary-hover"
-                    >
-                        <Mail className="w-5 h-5 mr-3" /> Odeslat smlouvu e-mailem
-                    </button>
-                    <button
-                        onClick={handleManualCopy}
-                        className="text-sm text-gray-500 hover:text-gray-700 underline"
-                    >
-                        {copyTextStatus}
-                    </button>
-                </div>
-                <div className="mt-6">
-                    <button
-                        onClick={onClose}
-                        className="py-2 px-8 rounded-lg bg-gray-200 hover:bg-gray-300 font-semibold"
-                    >
-                        Hotovo
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-
 const Reservations: React.FC = () => {
     const { data, loading, actions } = useData();
     const { vehicles, customers, reservations } = data;
@@ -365,6 +286,71 @@ Digitální podpis nájemce:
         setFormData(prev => ({ ...prev, selectedCustomerId: customerId, isNewCustomer: false }));
     };
     
+    const ConfirmationModal = () => {
+        const [copyTextStatus, setCopyTextStatus] = useState('Ručně zkopírovat text smlouvy');
+    
+        if (!generatedContractInfo) return null;
+    
+        const handleSendMail = () => {
+            const subject = `Smlouva o pronájmu vozidla: ${generatedContractInfo.vehicleName}`;
+            const body = generatedContractInfo.contractText;
+    
+            const mailtoLink = `mailto:${generatedContractInfo.customerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            
+            if (mailtoLink.length > 2000) {
+                 alert("Smlouva je příliš dlouhá pro automatické odeslání e-mailem. Prosím, použijte ruční kopírování.");
+                 handleManualCopy();
+                 return;
+            }
+    
+            window.location.href = mailtoLink;
+        };
+    
+        const handleManualCopy = () => {
+            navigator.clipboard.writeText(generatedContractInfo.contractText).then(() => {
+                setCopyTextStatus('Zkopírováno!');
+                setTimeout(() => setCopyTextStatus('Ručně zkopírovat text smlouvy'), 2000);
+            }).catch(err => {
+                alert('Nepodařilo se zkopírovat text.');
+                console.error(err);
+            });
+        };
+    
+        return (
+            <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50">
+                <div className="bg-white rounded-lg shadow-2xl p-8 w-full max-w-lg text-center">
+                    <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                    <h2 className="text-2xl font-bold mb-2">Rezervace a smlouva vytvořena!</h2>
+                    <p className="text-gray-600 mb-6">
+                        Smlouva byla úspěšně uložena. Kliknutím na tlačítko níže otevřete váš e-mailový program s připravenou zprávou pro zákazníka.
+                    </p>
+                    <div className="space-y-3">
+                        <button
+                            onClick={handleSendMail}
+                            className="w-full flex items-center justify-center py-3 px-4 rounded-lg font-semibold transition-colors bg-primary text-white hover:bg-primary-hover"
+                        >
+                            <Mail className="w-5 h-5 mr-3" /> Odeslat smlouvu e-mailem
+                        </button>
+                        <button
+                            onClick={handleManualCopy}
+                            className="text-sm text-gray-500 hover:text-gray-700 underline"
+                        >
+                            {copyTextStatus}
+                        </button>
+                    </div>
+                    <div className="mt-6">
+                        <button
+                            onClick={() => setIsConfirmationModalOpen(false)}
+                            className="py-2 px-8 rounded-lg bg-gray-200 hover:bg-gray-300 font-semibold"
+                        >
+                            Hotovo
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     return (
         <>
         <SignatureModal 
@@ -372,11 +358,7 @@ Digitální podpis nájemce:
             onClose={() => setIsSignatureModalOpen(false)}
             onSave={handleSaveSignature}
         />
-        <ConfirmationModal 
-            isOpen={isConfirmationModalOpen}
-            onClose={() => setIsConfirmationModalOpen(false)}
-            contractInfo={generatedContractInfo}
-        />
+        {isConfirmationModalOpen && <ConfirmationModal />}
 
         <form onSubmit={handleSubmit} className="space-y-8">
             <h1 className="text-3xl font-bold text-gray-800">Nová rezervace</h1>

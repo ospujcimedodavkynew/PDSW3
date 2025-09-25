@@ -87,16 +87,11 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
             .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
     }, [reservations]);
     
+    // FIX: Replaced `reduce` with a more type-safe `for...of` loop to avoid type inference issues.
     const groupedFutureRentals = useMemo(() => {
         const groups: Record<string, Reservation[]> = {};
         for (const rental of futureRentals) {
-            // CRITICAL FIX: Ensure startDate exists to prevent crash on new Date(null) or new Date(undefined)
-            if (!rental.startDate) continue;
-
             const rentalDate = new Date(rental.startDate);
-            // Defend against invalid dates which would crash on .toISOString()
-            if (isNaN(rentalDate.getTime())) continue;
-
             const dateKey = rentalDate.toISOString().split('T')[0]; // YYYY-MM-DD
             if (!groups[dateKey]) {
                 groups[dateKey] = [];
