@@ -17,10 +17,10 @@ import { createClient } from '@supabase/supabase-js';
 // ===================================================================
 
 // PŘÍKLAD: "https://abcdefghijkl.supabase.co"
-const supabaseUrl = "!!! SEM VLOŽTE VAŠI SUPABASE URL !!!";
+const supabaseUrl = "https://pnamzbzuqqeyjotswxbd.supabase.co";
 
 // PŘÍKLAD: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3Mi..."
-const supabaseAnonKey = "!!! SEM VLOŽTE VÁŠ SUPABASE ANON KEY !!!";
+const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuYW16Ynp1cXFleWpvdHN3eGJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MzA0NzYsImV4cCI6MjA3MzUwNjQ3Nn0.M_7RLVc0gHG3VeeSzvQ3f4Vw0ftWbj68Ww15DF65PYs";
 
 
 // Kontrola, zda byly klíče vyplněny.
