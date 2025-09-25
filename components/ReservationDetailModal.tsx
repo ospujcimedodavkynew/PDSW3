@@ -239,7 +239,41 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
 
                             {/* Notes, Damage, Agreement */}
                             <div><label htmlFor="notes" className="font-semibold text-gray-500">Poznámky</label><textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full mt-1 p-2 border rounded-md h-20" placeholder="Např. specifické detaily ke stavu vozidla..."/></div>
-                            <div className="bg-red-50 border border-red-200 p-4 rounded-lg space-y-3"><h3 className="font-semibold text-red-800 flex items-center"><ShieldAlert className="w-5 h-5 mr-2" /> Záznam o novém poškození</h3>{/* Damage Form & List */}</div>
+                            <div className="bg-red-50 border border-red-200 p-4 rounded-lg space-y-3">
+                                <h3 className="font-semibold text-red-800 flex items-center"><ShieldAlert className="w-5 h-5 mr-2" /> Záznam o novém poškození</h3>
+                                
+                                {newDamages.length > 0 && (
+                                    <div className="space-y-2">
+                                        {newDamages.map((damage, index) => (
+                                            <div key={index} className="flex items-center justify-between bg-red-100 p-2 rounded">
+                                                <div className="flex items-center">
+                                                    <img src={damage.previewUrl} alt="náhled" className="w-12 h-12 object-cover rounded mr-3" />
+                                                    <div>
+                                                        <p className="font-semibold text-sm">{damage.description}</p>
+                                                        <p className="text-xs text-gray-600">{damage.location}</p>
+                                                    </div>
+                                                </div>
+                                                <button type="button" onClick={() => handleRemoveDamage(index)} className="p-1 rounded-full hover:bg-red-200">
+                                                    <Trash2 className="w-4 h-4 text-red-700" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+                                    <input type="text" placeholder="Popis poškození" value={damageDescription} onChange={e => setDamageDescription(e.target.value)} className="w-full p-2 border rounded-md" />
+                                    <input type="text" placeholder="Umístění (např. pravý zadní blatník)" value={damageLocation} onChange={e => setDamageLocation(e.target.value)} className="w-full p-2 border rounded-md" />
+                                    <div className="col-span-full">
+                                        <input id="damage-file-input" type="file" accept="image/*" onChange={e => setDamageImageFile(e.target.files ? e.target.files[0] : null)} className="text-sm w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+                                    </div>
+                                    <div className="col-span-full">
+                                        <button type="button" onClick={handleAddDamage} className="w-full md:w-auto flex items-center justify-center py-2 px-4 rounded-md font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors">
+                                            <PlusCircle className="w-4 h-4 mr-2" /> Přidat záznam o poškození
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                             
                             <div className="border-t pt-4">
                                 <h3 className="font-semibold text-gray-500 mb-2 flex items-center"><CheckSquare className="w-5 h-5 mr-2" /> Souhlas zákazníka</h3>
