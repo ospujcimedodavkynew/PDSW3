@@ -69,22 +69,11 @@ class ErrorBoundary extends Component<EBProps, EBState> {
 }
 // --- End of Error Boundary ---
 
-
-const AppContent: React.FC = () => {
+// This component is for the main, authenticated application experience.
+// It assumes it's rendered within a DataProvider.
+const AuthenticatedApp: React.FC = () => {
     const { session, loading, isVehicleFormModalOpen, vehicleBeingEdited, actions } = useData();
     const [currentPage, setCurrentPage] = useState<Page>(Page.DASHBOARD);
-    
-    const urlParams = new URLSearchParams(window.location.search);
-    const portalToken = urlParams.get('portal');
-    const isOnlineBooking = urlParams.get('online-rezervace') === 'true';
-
-    if (isOnlineBooking) {
-        return <OnlineBooking />;
-    }
-    
-    if (portalToken) {
-        return <CustomerPortal token={portalToken} />;
-    }
 
     if (loading) {
         return <div className="flex items-center justify-center min-h-screen"><Loader className="w-8 h-8 animate-spin" /></div>;
@@ -127,13 +116,33 @@ const AppContent: React.FC = () => {
     );
 };
 
+// This is the new main router component. It decides which "app" to show.
+const AppRouter: React.FC = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const portalToken = urlParams.get('portal');
+    const isOnlineBooking = urlParams.get('online-rezervace') === 'true';
 
+    if (isOnlineBooking) {
+        return <OnlineBooking />;
+    }
+    
+    if (portalToken) {
+        return <CustomerPortal token={portalToken} />;
+    }
+    
+    // The default is the main application, which needs the data provider.
+    return (
+        <DataProvider>
+            <AuthenticatedApp />
+        </DataProvider>
+    );
+};
+
+// The top-level App component just wraps everything in an ErrorBoundary.
 const App: React.FC = () => {
     return (
         <ErrorBoundary>
-            <DataProvider>
-                <AppContent />
-            </DataProvider>
+            <AppRouter />
         </ErrorBoundary>
     );
 };
