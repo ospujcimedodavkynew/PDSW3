@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode, useState } from 'react';
+import React, { Component, ErrorInfo, ReactNode, useState, useMemo } from 'react';
 import { DataProvider, useData } from './contexts/DataContext';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
@@ -74,9 +74,15 @@ const AppContent: React.FC = () => {
     const { session, loading, isVehicleFormModalOpen, vehicleBeingEdited, actions } = useData();
     const [currentPage, setCurrentPage] = useState<Page>(Page.DASHBOARD);
     
-    const urlParams = new URLSearchParams(window.location.search);
-    const portalToken = urlParams.get('portal');
-    const isOnlineBooking = urlParams.get('online-rezervace') === 'true';
+    // FIX: Memoize reading from window.location to prevent side effects during render.
+    // This is crucial for stability, especially in production builds.
+    const { portalToken, isOnlineBooking } = useMemo(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        return {
+            portalToken: urlParams.get('portal'),
+            isOnlineBooking: urlParams.get('online-rezervace') === 'true',
+        };
+    }, []);
 
     if (isOnlineBooking) {
         return <OnlineBooking />;
