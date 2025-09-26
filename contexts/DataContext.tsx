@@ -39,7 +39,7 @@ interface DataContextActions {
     rejectReservation: (reservationId: string) => Promise<void>;
     activateReservation: (reservationId: string, startMileage: number, signatureDataUrl: string) => Promise<void>;
     completeReservation: (reservationId: string, endMileage: number, protocolData: ProtocolData, signatureDataUrl: string) => Promise<void>;
-    addContract: (contractData: Omit<Contract, 'id'>, signatureDataUrl: string) => Promise<void>;
+    addContract: (contractData: Omit<Contract, 'id'>, signatureDataUrl: string) => Promise<Contract>;
     addExpense: (expenseData: { description: string; amount: number; date: Date; }) => Promise<void>;
     addService: (serviceData: Omit<VehicleService, 'id'>) => Promise<void>;
     updateService: (serviceId: string, updates: Partial<VehicleService>) => Promise<void>;
@@ -439,6 +439,7 @@ ${signatureHtml}
 
              const newContract = await api.addContract({ ...contractData, contractText: contractTextWithSignature });
              setData(prev => expandData({ ...prev, contracts: [...prev.contracts, newContract] }));
+             return newContract;
         },
         addExpense: async (expenseData) => {
             const newExpense = await api.addFinancialTransaction({ ...expenseData, type: 'expense' });

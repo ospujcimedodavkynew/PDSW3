@@ -18,6 +18,7 @@ import OnlineBooking from './pages/OnlineBooking';
 import VehicleFormModal from './components/VehicleFormModal';
 import { Page } from './types';
 import { Loader } from 'lucide-react';
+import ContractViewer from './pages/ContractViewer';
 
 
 // --- Error Boundary Component ---
@@ -76,13 +77,18 @@ const AppContent: React.FC = () => {
     
     // FIX: Memoize reading from window.location to prevent side effects during render.
     // This is crucial for stability, especially in production builds.
-    const { portalToken, isOnlineBooking } = useMemo(() => {
+    const { portalToken, isOnlineBooking, contractId } = useMemo(() => {
         const urlParams = new URLSearchParams(window.location.search);
         return {
             portalToken: urlParams.get('portal'),
             isOnlineBooking: urlParams.get('online-rezervace') === 'true',
+            contractId: urlParams.get('smlouva'),
         };
     }, []);
+
+    if (contractId) {
+        return <ContractViewer contractId={contractId} />;
+    }
 
     if (isOnlineBooking) {
         return <OnlineBooking />;

@@ -362,7 +362,7 @@ export const getAllData = async () => {
     };
 };
 
-// --- Data Fetching (For Public Booking Page) ---
+// --- Data Fetching (For Public Pages) ---
 export const getPublicBookingData = async () => {
     const [vehiclesRes, reservationsRes] = await Promise.all([
         supabase.from('vehicles').select('*'),
@@ -384,6 +384,24 @@ export const getReservationByToken = async (token: string): Promise<Reservation 
     const { data, error } = await supabase.from('reservations').select('*, vehicle:vehicles(*)').eq('portal_token', token).single();
     return fromReservation(handleSupabaseError({ data, error }, 'reservation by token'));
 };
+
+export const getContractById = async (id: string): Promise<Contract | null> => {
+    const { data, error } = await supabase
+        .from('contracts')
+        .select('*, customer:customers(*), vehicle:vehicles(*)')
+        .eq('id', id)
+        .single();
+    
+    if (error || !data) {
+        return handleSupabaseError({ data, error }, 'contract by id');
+    }
+    
+    const contract = fromContract(data);
+    if (data.customer) contract.customer = fromCustomer(data.customer);
+    if (data.vehicle) contract.vehicle = fromVehicle(data.vehicle);
+    return contract;
+};
+
 
 export const getServicesForVehicle = async (vehicleId: string): Promise<VehicleService[]> => {
     const { data, error } = await supabase.from('vehicle_services').select('*').eq('vehicle_id', vehicleId).order('service_date', { ascending: false });

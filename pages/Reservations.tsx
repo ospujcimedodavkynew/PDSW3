@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import type { Reservation, Vehicle, Customer } from '../types';
-import { UserPlus, Car, Calendar as CalendarIcon, Signature, Edit, Search, X, Copy, CheckCircle, Mail } from 'lucide-react';
+import type { Reservation, Vehicle, Customer, Contract } from '../types';
+import { UserPlus, Car, Calendar as CalendarIcon, Signature, Edit, Search, X, Copy, CheckCircle, Mail, Link as LinkIcon } from 'lucide-react';
 import SignatureModal from '../components/SignatureModal';
 import { useData } from '../contexts/DataContext';
 
@@ -41,41 +41,37 @@ const loadDraft = (): ReservationFormData => {
 interface ConfirmationModalProps {
     isOpen: boolean;
     onClose: () => void;
-    contractInfo: { contractText: string; customerEmail: string; vehicleName: string } | null;
+    contractInfo: { contractId: string; customerEmail: string; vehicleName: string } | null;
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, contractInfo }) => {
-    const [copyTextStatus, setCopyTextStatus] = useState('Ručně zkopírovat text smlouvy');
+    const [copyStatus, setCopyStatus] = useState('Zkopírovat odkaz na smlouvu');
 
     useEffect(() => {
         if (isOpen) {
-            setCopyTextStatus('Ručně zkopírovat text smlouvy');
+            setCopyStatus('Zkopírovat odkaz na smlouvu');
         }
     }, [isOpen]);
 
     if (!isOpen || !contractInfo) return null;
 
+    const contractLink = `${window.location.origin}${window.location.pathname}?smlouva=${contractInfo.contractId}`;
+
     const handleSendMail = () => {
         const subject = `Smlouva o pronájmu vozidla: ${contractInfo.vehicleName}`;
-        const body = contractInfo.contractText;
-
+        const body = `Dobrý den,\n\nděkujeme za Vaši rezervaci. Zde naleznete odkaz na Vaši smlouvu o pronájmu:\n\n${contractLink}\n\nS pozdravem,\nVáš tým pujcimedodavky.cz`;
+        
         const mailtoLink = `mailto:${contractInfo.customerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         
-        if (mailtoLink.length > 2000) {
-             alert("Smlouva je příliš dlouhá pro automatické odeslání e-mailem. Prosím, použijte ruční kopírování.");
-             handleManualCopy();
-             return;
-        }
-
         window.location.href = mailtoLink;
     };
 
-    const handleManualCopy = () => {
-        navigator.clipboard.writeText(contractInfo.contractText).then(() => {
-            setCopyTextStatus('Zkopírováno!');
-            setTimeout(() => setCopyTextStatus('Ručně zkopírovat text smlouvy'), 2000);
+    const handleCopyLink = () => {
+        navigator.clipboard.writeText(contractLink).then(() => {
+            setCopyStatus('Odkaz zkopírován!');
+            setTimeout(() => setCopyStatus('Zkopírovat odkaz na smlouvu'), 2000);
         }).catch(err => {
-            alert('Nepodařilo se zkopírovat text.');
+            alert('Nepodařilo se zkopírovat odkaz.');
             console.error(err);
         });
     };
@@ -86,20 +82,20 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
                 <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
                 <h2 className="text-2xl font-bold mb-2">Rezervace a smlouva vytvořena!</h2>
                 <p className="text-gray-600 mb-6">
-                    Smlouva byla úspěšně uložena. Kliknutím na tlačítko níže otevřete váš e-mailový program s připravenou zprávou pro zákazníka.
+                    Smlouva byla uložena a je připravena k odeslání zákazníkovi. E-mail bude obsahovat unikátní odkaz na online verzi smlouvy.
                 </p>
                 <div className="space-y-3">
                     <button
                         onClick={handleSendMail}
                         className="w-full flex items-center justify-center py-3 px-4 rounded-lg font-semibold transition-colors bg-primary text-white hover:bg-primary-hover"
                     >
-                        <Mail className="w-5 h-5 mr-3" /> Odeslat smlouvu e-mailem
+                        <Mail className="w-5 h-5 mr-3" /> Odeslat odkaz e-mailem
                     </button>
                     <button
-                        onClick={handleManualCopy}
-                        className="text-sm text-gray-500 hover:text-gray-700 underline"
+                        onClick={handleCopyLink}
+                        className="w-full flex items-center justify-center text-sm py-2 px-4 rounded-lg font-semibold bg-gray-100 hover:bg-gray-200"
                     >
-                        {copyTextStatus}
+                         <LinkIcon className="w-4 h-4 mr-2" /> {copyStatus}
                     </button>
                 </div>
                 <div className="mt-6">
@@ -156,7 +152,7 @@ const Reservations: React.FC = () => {
     const [customerSearchTerm, setCustomerSearchTerm] = useState('');
     
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
-    const [generatedContractInfo, setGeneratedContractInfo] = useState<{contractText: string, customerEmail: string, vehicleName: string} | null>(null);
+    const [generatedContractInfo, setGeneratedContractInfo] = useState<{contractId: string, customerEmail: string, vehicleName: string} | null>(null);
 
     const filteredCustomers = useMemo(() => {
         if (!customerSearchTerm) return customers;
@@ -365,7 +361,7 @@ Digitální podpis nájemce:
 %%SIGNATURE_IMAGE%%
                 `.trim();
                 
-                await actions.addContract({
+                const newContract = await actions.addContract({
                     reservationId: newReservation.id,
                     customerId: finalCustomerId,
                     vehicleId: selectedVehicleId,
@@ -373,7 +369,11 @@ Digitální podpis nájemce:
                     contractText,
                 }, signatureDataUrl);
 
-                setGeneratedContractInfo({ contractText, customerEmail: customerForContract.email, vehicleName: contractVehicle.name });
+                setGeneratedContractInfo({ 
+                    contractId: newContract.id, 
+                    customerEmail: customerForContract.email, 
+                    vehicleName: contractVehicle.name 
+                });
                 setIsConfirmationModalOpen(true);
                 resetForm();
             }
