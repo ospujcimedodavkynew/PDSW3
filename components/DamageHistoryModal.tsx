@@ -60,9 +60,8 @@ const DamageHistoryModal: React.FC<DamageHistoryModalProps> = ({ isOpen, onClose
                                     <p className="text-gray-600 mb-2">{damage.location}</p>
                                     <div className="text-sm space-y-1 text-gray-500">
                                         <p className="flex items-center"><Calendar className="w-4 h-4 mr-2" />Nahlášeno: {new Date(damage.reportedAt).toLocaleString('cs-CZ')}</p>
-                                        {/* FIX: Corrected property access from `customers` to `customer` to match the Reservation type. */}
                                         {damage.reservation && damage.reservation.customer && (
-                                            <p className="flex items-center"><User className="w-4 h-4 mr-2" />Při rezervaci zákazníka: {damage.reservation.customer.firstName} {damage.reservation.customer.lastName}</p>
+                                            <p className="flex items-center"><User className="w-4 h-4 mr-2" />Při rezervaci zákazníka: {damage.reservation.customer?.firstName} {damage.reservation.customer?.lastName}</p>
                                         )}
                                     </div>
                                 </div>

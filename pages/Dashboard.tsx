@@ -28,7 +28,7 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
 
         // Planned services
         services.forEach(s => {
-            if (s.status === 'planned' && new Date(s.serviceDate) > today && new Date(s.serviceDate) <= thirtyDaysFromNow) {
+            if (s.status === 'planned' && s.serviceDate && new Date(s.serviceDate) > today && new Date(s.serviceDate) <= thirtyDaysFromNow) {
                 events.push({ type: 'service' as const, vehicle: s.vehicle, date: s.serviceDate, description: s.description });
             }
         });
@@ -60,21 +60,40 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
     ];
     
     const fleetUtilization = vehicles.length > 0 ? Math.round((vehicles.filter(v => v.status === 'rented').length / vehicles.length) * 100) : 0;
+    
+    const todaysActivities = useMemo(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
+        return reservations
+            .map(r => {
+                let date: Date | null = null;
+                let type: 'departure' | 'arrival' | null = null;
 
-    const todaysDepartures = reservations
-        .filter(r => r.status === 'scheduled' && new Date(r.startDate) >= today && new Date(r.startDate) < tomorrow)
-        .map(r => ({ ...r, type: 'departure' as const, time: new Date(r.startDate) }));
+                if (r.status === 'scheduled' && r.startDate) {
+                    date = new Date(r.startDate);
+                    type = 'departure';
+                } else if (r.status === 'active' && r.endDate) {
+                    date = new Date(r.endDate);
+                    type = 'arrival';
+                }
 
-    const todaysArrivals = reservations
-        .filter(r => r.status === 'active' && new Date(r.endDate) >= today && new Date(r.endDate) < tomorrow)
-        .map(r => ({ ...r, type: 'arrival' as const, time: new Date(r.endDate) }));
+                if (!date || isNaN(date.getTime())) {
+                    return null; // Skip reservations with invalid dates
+                }
+                
+                if (date >= today && date < tomorrow) {
+                    return { ...r, type, time: date };
+                }
+                
+                return null;
+            })
+            .filter((r): r is Reservation & { type: 'departure' | 'arrival'; time: Date } => !!r)
+            .sort((a, b) => a.time.getTime() - b.time.getTime());
+    }, [reservations]);
 
-    const todaysActivities = [...todaysDepartures, ...todaysArrivals].sort((a, b) => a.time.getTime() - b.time.getTime());
 
     const activeRentals = reservations.filter(r => r.status === 'active');
     
@@ -83,15 +102,25 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
         endOfToday.setHours(23, 59, 59, 999);
 
         return reservations
-            .filter(r => r.status === 'scheduled' && new Date(r.startDate) > endOfToday)
-            .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+            .filter(r => {
+                if (r.status !== 'scheduled' || !r.startDate) return false;
+                const startDate = new Date(r.startDate);
+                // Ensure date is valid and in the future
+                return !isNaN(startDate.getTime()) && startDate > endOfToday;
+            })
+            .sort((a, b) => new Date(a.startDate!).getTime() - new Date(b.startDate!).getTime());
     }, [reservations]);
     
-    // FIX: Replaced `reduce` with a more type-safe `for...of` loop to avoid type inference issues.
     const groupedFutureRentals = useMemo(() => {
         const groups: Record<string, Reservation[]> = {};
         for (const rental of futureRentals) {
+            // This check is now redundant because `futureRentals` is pre-filtered,
+            // but keeping it for maximum safety doesn't hurt.
+            if (!rental.startDate) continue;
+
             const rentalDate = new Date(rental.startDate);
+            if (isNaN(rentalDate.getTime())) continue;
+
             const dateKey = rentalDate.toISOString().split('T')[0]; // YYYY-MM-DD
             if (!groups[dateKey]) {
                 groups[dateKey] = [];
@@ -127,8 +156,15 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
     const hasAlerts = maintenanceVehicles.length > 0 || upcomingEvents.length > 0;
     
     const getReturnStatus = (endDate: Date | string) => {
-        const now = new Date();
+        if (!endDate) {
+            return { text: 'Chybí datum konce', color: 'red' };
+        }
         const end = new Date(endDate);
+        if (isNaN(end.getTime())) {
+            return { text: 'Neplatné datum konce', color: 'red' };
+        }
+        
+        const now = new Date();
         if (end < now) {
             const lateHours = (now.getTime() - end.getTime()) / (1000 * 60 * 60);
             if (lateHours < 24) {
@@ -263,7 +299,7 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                                             <div className="flex items-center justify-between space-x-4">
                                                 <div className="flex items-center space-x-4 flex-grow">
                                                     <div className="font-bold text-lg w-20 text-center flex-shrink-0">
-                                                        {new Date(res.startDate).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}
+                                                        {new Date(res.startDate!).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}
                                                     </div>
                                                     <div className="flex-grow">
                                                         <p className="font-semibold">{res.customer?.firstName} {res.customer?.lastName}</p>

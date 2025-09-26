@@ -31,6 +31,8 @@ interface DataContextActions {
     updateCustomer: (customerData: Customer) => Promise<void>;
     addVehicle: (vehicleData: Omit<Vehicle, 'id'>) => Promise<Vehicle>;
     updateVehicle: (vehicleData: Vehicle) => Promise<void>;
+    openVehicleFormModal: (vehicle: Partial<Vehicle> | null) => void;
+    closeVehicleFormModal: () => void;
     addReservation: (reservationData: Omit<Reservation, 'id' | 'status'>) => Promise<Reservation>;
     approveReservation: (reservationId: string) => Promise<void>;
     rejectReservation: (reservationId: string) => Promise<void>;
@@ -51,6 +53,8 @@ interface DataContextState {
     loading: boolean;
     actions: DataContextActions;
     session: Session | null;
+    isVehicleFormModalOpen: boolean;
+    vehicleBeingEdited: Partial<Vehicle> | null;
 }
 
 const DataContext = createContext<DataContextState | undefined>(undefined);
@@ -116,6 +120,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [session, setSession] = useState<Session | null>(null);
     const [authLoading, setAuthLoading] = useState(true);
     const [dataLoading, setDataLoading] = useState(true);
+    
+    // State for the global vehicle form modal
+    const [isVehicleFormModalOpen, setIsVehicleFormModalOpen] = useState(false);
+    const [vehicleBeingEdited, setVehicleBeingEdited] = useState<Partial<Vehicle> | null>(null);
 
     useEffect(() => {
         api.getSession().then(({ data: { session } }) => {
@@ -196,6 +204,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 vehicles: prev.vehicles.map(v => v.id === updatedVehicle.id ? updatedVehicle : v)
             }));
         },
+        openVehicleFormModal: useCallback((vehicle: Partial<Vehicle> | null) => {
+            setVehicleBeingEdited(vehicle);
+            setIsVehicleFormModalOpen(true);
+        }, []),
+        closeVehicleFormModal: useCallback(() => {
+            setIsVehicleFormModalOpen(false);
+            setVehicleBeingEdited(null);
+        }, []),
         addReservation: async (resData) => {
             const newReservation = await api.addReservation(resData);
             setData(prev => expandData({ ...prev, reservations: [...prev.reservations, newReservation] }));
@@ -351,7 +367,7 @@ ${protocolData.notes || 'Žádné.'}
 ---------------------------------
 Nová poškození nahlášená při tomto vrácení jsou zaznamenána samostatně v historii poškození vozidla.
 
---- SOUHLAS ZÁKAZNÍKA ---
+--- SOUHLAS ZÁKAZNIKA ---
 Zákazník digitálně odsouhlasil obsah tohoto protokolu dne ${new Date().toLocaleString('cs-CZ')}.
 `.trim();
 
@@ -430,7 +446,7 @@ Zákazník digitálně odsouhlasil obsah tohoto protokolu dne ${new Date().toLoc
         },
     }), [data, refreshData]);
 
-    const value = { data, loading: authLoading || (!!session && dataLoading), actions, session };
+    const value = { data, loading: authLoading || (!!session && dataLoading), actions, session, isVehicleFormModalOpen, vehicleBeingEdited };
 
     return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };
