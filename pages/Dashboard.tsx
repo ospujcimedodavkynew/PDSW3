@@ -24,29 +24,42 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
         const thirtyDaysFromNow = new Date();
         thirtyDaysFromNow.setDate(today.getDate() + 30);
 
-        const events = [];
+        const events: {
+            type: 'service' | 'stk' | 'vignette' | 'insurance';
+            vehicle: Vehicle;
+            date: Date | string;
+            description: string;
+        }[] = [];
+
+        // Helper to safely check dates and add events
+        const addEventIfValid = (
+            date: Date | string | undefined, 
+            type: 'service' | 'stk' | 'vignette' | 'insurance', 
+            vehicle: Vehicle | undefined,
+            description: string
+        ) => {
+            if (!date || !vehicle) return;
+            const d = new Date(date);
+            if (isNaN(d.getTime())) return; // THE CRUCIAL CHECK
+            
+            if (d > today && d <= thirtyDaysFromNow) {
+                events.push({ type, vehicle, date, description });
+            }
+        };
 
         // Planned services
         services.forEach(s => {
-            if (s.status === 'planned' && s.serviceDate && new Date(s.serviceDate) > today && new Date(s.serviceDate) <= thirtyDaysFromNow) {
-                events.push({ type: 'service' as const, vehicle: s.vehicle, date: s.serviceDate, description: s.description });
+            if (s.status === 'planned') {
+                addEventIfValid(s.serviceDate, 'service', s.vehicle, s.description);
             }
         });
 
-        // STK, Vignette, Insurance
+        // STK, Vignette, Insurance from vehicles
         vehicles.forEach(v => {
-            if (v.stkExpiry && new Date(v.stkExpiry) > today && new Date(v.stkExpiry) <= thirtyDaysFromNow) {
-                events.push({ type: 'stk' as const, vehicle: v, date: v.stkExpiry, description: `Končí platnost STK` });
-            }
-            if (v.vignetteExpiry && new Date(v.vignetteExpiry) > today && new Date(v.vignetteExpiry) <= thirtyDaysFromNow) {
-                events.push({ type: 'vignette' as const, vehicle: v, date: v.vignetteExpiry, description: `Končí platnost dálniční známky` });
-            }
-            if (v.insuranceDueDatePov && new Date(v.insuranceDueDatePov) > today && new Date(v.insuranceDueDatePov) <= thirtyDaysFromNow) {
-                events.push({ type: 'insurance' as const, vehicle: v, date: v.insuranceDueDatePov, description: `Splatnost povinného ručení` });
-            }
-            if (v.insuranceDueDateHav && new Date(v.insuranceDueDateHav) > today && new Date(v.insuranceDueDateHav) <= thirtyDaysFromNow) {
-                events.push({ type: 'insurance' as const, vehicle: v, date: v.insuranceDueDateHav, description: `Splatnost havarijního pojištění` });
-            }
+            addEventIfValid(v.stkExpiry, 'stk', v, `Končí platnost STK`);
+            addEventIfValid(v.vignetteExpiry, 'vignette', v, `Končí platnost dálniční známky`);
+            addEventIfValid(v.insuranceDueDatePov, 'insurance', v, `Splatnost povinného ručení`);
+            addEventIfValid(v.insuranceDueDateHav, 'insurance', v, `Splatnost havarijního pojištění`);
         });
 
         return events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
