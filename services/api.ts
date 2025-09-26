@@ -405,8 +405,27 @@ export const uploadFile = async (bucket: string, path: string, file: File): Prom
 };
 
 export const addCustomer = async (customerData: Omit<Customer, 'id'>): Promise<Customer> => {
-    const { data, error } = await supabase.from('customers').insert([toCustomer(customerData)]).select().single();
-    return fromCustomer(handleSupabaseError({ data, error }, 'add customer'));
+    // Check if a customer with this email already exists to prevent duplicate errors.
+    const { data: existingCustomerData, error: findError } = await supabase
+        .from('customers')
+        .select('id') // Only need the ID for the check and update
+        .eq('email', customerData.email)
+        .single();
+
+    // Supabase returns 'PGRST116' when no rows are found, which is not an error in this case.
+    if (findError && findError.code !== 'PGRST116') {
+        throw handleSupabaseError({ error: findError, data: null }, 'find existing customer');
+    }
+
+    if (existingCustomerData) {
+        // Customer exists: update their details with the new data provided by the user.
+        const updatedCustomer = await updateCustomer({ id: existingCustomerData.id, ...customerData });
+        return updatedCustomer;
+    } else {
+        // Customer does not exist: create a new one.
+        const { data, error } = await supabase.from('customers').insert([toCustomer(customerData)]).select().single();
+        return fromCustomer(handleSupabaseError({ data, error }, 'add customer'));
+    }
 };
 
 export const updateCustomer = async (customerData: Customer): Promise<Customer> => {
