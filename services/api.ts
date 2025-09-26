@@ -430,10 +430,9 @@ export const addCustomer = async (customerData: Omit<Customer, 'id'>): Promise<C
         .from('customers')
         .select('id') // Only need the ID for the check and update
         .eq('email', customerData.email)
-        .single();
+        .maybeSingle(); // Use maybeSingle to avoid error if no customer is found
 
-    // Supabase returns 'PGRST116' when no rows are found, which is not an error in this case.
-    if (findError && findError.code !== 'PGRST116') {
+    if (findError) {
         throw handleSupabaseError({ error: findError, data: null }, 'find existing customer');
     }
 
@@ -449,9 +448,26 @@ export const addCustomer = async (customerData: Omit<Customer, 'id'>): Promise<C
 };
 
 export const updateCustomer = async (customerData: Customer): Promise<Customer> => {
-    const { data, error } = await supabase.from('customers').update(toCustomer(customerData)).eq('id', customerData.id).select().single();
-    return fromCustomer(handleSupabaseError({ data, error }, 'update customer'));
+    // FIX: Removed .single() and added robust handling for the response array.
+    // This prevents the "Cannot coerce result" error when RLS policies for anonymous users
+    // allow an UPDATE but not a subsequent SELECT on the updated row.
+    const { data, error } = await supabase
+        .from('customers')
+        .update(toCustomer(customerData))
+        .eq('id', customerData.id)
+        .select();
+
+    const result = handleSupabaseError({ data, error }, 'update customer');
+
+    if (!result || result.length === 0) {
+        // This can happen if RLS prevents SELECT after UPDATE.
+        // Assume update was successful and return the submitted data.
+        return customerData;
+    }
+
+    return fromCustomer(result[0]);
 };
+
 
 export const addVehicle = async (vehicleData: Omit<Vehicle, 'id'>): Promise<Vehicle> => {
     const { data, error } = await supabase.from('vehicles').insert([toVehicle(vehicleData)]).select().single();
@@ -540,33 +556,13 @@ export const submitCustomerDetails = async (token: string, customerData: Omit<Cu
 };
 
 export const createOnlineReservation = async (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>): Promise<Reservation> => {
-    // Check if customer exists by email
-    const { data: existingCustomer, error: findError } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('email', customerData.email)
-        .single();
-
-    // Supabase returns an error with code 'PGRST116' when no rows are found for a .single() query.
-    // We should only throw an error if it's something other than that.
-    if (findError && findError.code !== 'PGRST116') {
-        throw handleSupabaseError({ error: findError, data: null }, 'find existing customer');
-    }
-
-    let customerId: string;
-
-    if (existingCustomer) {
-        // Customer exists: use their ID and update their details with the new ones.
-        customerId = existingCustomer.id;
-        await updateCustomer({ id: customerId, ...customerData });
-    } else {
-        // New customer: create them.
-        const newCustomer = await addCustomer(customerData);
-        customerId = newCustomer.id;
-    }
+    // REFACTOR: Centralize the customer upsert logic by calling `addCustomer`,
+    // which already handles checking for an existing customer and updating or creating them.
+    // This removes duplicate code and ensures consistent behavior.
+    const customer = await addCustomer(customerData);
 
     // Create the reservation with the correct customer ID and 'pending-approval' status.
-    const reservationData: Partial<Reservation> = { customerId, vehicleId, startDate, endDate, status: 'pending-approval' };
+    const reservationData: Partial<Reservation> = { customerId: customer.id, vehicleId, startDate, endDate, status: 'pending-approval' };
     const { data, error } = await supabase.from('reservations').insert([toReservation(reservationData)]).select().single();
     return fromReservation(handleSupabaseError({ data, error }, 'create online reservation'));
 };

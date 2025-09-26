@@ -3,6 +3,7 @@ import { useData } from '../contexts/DataContext';
 import { Customer, Reservation, Vehicle } from '../types';
 import { CheckCircle, Loader, Clock } from 'lucide-react';
 import { getPublicBookingData } from '../services/api';
+import { calculateTotalPrice } from '../contexts/DataContext'; // Import centralizované funkce
 
 const PREPARATION_BUFFER_MINUTES = 20;
 
@@ -147,11 +148,8 @@ const OnlineBooking: React.FC = () => {
 
     const totalPrice = useMemo(() => {
         if (!selectedVehicle || !isDateValid || !startDateObj || !endDateObj) return 0;
-        const durationHours = (endDateObj.getTime() - startDateObj.getTime()) / (1000 * 3600);
-        if (durationHours <= 4) return selectedVehicle.rate4h;
-        if (durationHours <= 12) return selectedVehicle.rate12h;
-        const days = Math.ceil(durationHours / 24);
-        return days * selectedVehicle.dailyRate;
+        // FIX: Use the central price calculation function for consistency.
+        return calculateTotalPrice(selectedVehicle, startDateObj, endDateObj);
     }, [selectedVehicle, isDateValid, startDateObj, endDateObj]);
 
     const handleSetDuration = (duration: number, unit: 'hours' | 'days') => {
