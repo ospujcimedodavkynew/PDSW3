@@ -398,9 +398,11 @@ export const getDamagesForVehicle = async (vehicleId: string): Promise<VehicleDa
 // --- Data Mutation ---
 
 export const uploadFile = async (bucket: string, path: string, file: File): Promise<string> => {
-    const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file);
+    // SYSTEM-WIDE FIX: Prepend 'public/' to all uploads to comply with RLS policies.
+    const finalPath = `public/${path}`;
+    const { error: uploadError } = await supabase.storage.from(bucket).upload(finalPath, file);
     if (uploadError) throw new Error(`Failed to upload file: ${uploadError.message}`);
-    const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+    const { data } = supabase.storage.from(bucket).getPublicUrl(finalPath);
     return data.publicUrl;
 };
 
