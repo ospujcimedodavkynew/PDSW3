@@ -57,21 +57,12 @@ const HandoverProtocols: React.FC = () => {
                     </div>
                 </div>
 
-                <div className={`grid grid-cols-1 ${selectedProtocol.signatureUrl ? 'md:grid-cols-3' : ''} gap-8`}>
-                    <div className={selectedProtocol.signatureUrl ? 'md:col-span-2' : ''}>
-                        <h3 className="font-bold text-lg mb-2">Plné znění protokolu</h3>
-                        <pre className="whitespace-pre-wrap bg-gray-100 p-4 rounded-md text-sm font-mono border overflow-auto max-h-[60vh]">
-                            {selectedProtocol.protocolText}
-                        </pre>
-                    </div>
-                    {selectedProtocol.signatureUrl && (
-                        <div>
-                            <h3 className="font-bold text-lg mb-2">Podpis zákazníka</h3>
-                            <div className="border p-2 rounded-md bg-gray-50">
-                                 <img src={selectedProtocol.signatureUrl} alt="Podpis zákazníka" className="w-full h-auto" />
-                            </div>
-                        </div>
-                    )}
+                <div>
+                    <h3 className="font-bold text-lg mb-2">Plné znění protokolu</h3>
+                    <pre
+                        className="whitespace-pre-wrap bg-gray-100 p-4 rounded-md text-sm font-mono border overflow-auto max-h-[60vh]"
+                        dangerouslySetInnerHTML={{ __html: selectedProtocol.protocolText }}
+                    />
                 </div>
             </div>
         );

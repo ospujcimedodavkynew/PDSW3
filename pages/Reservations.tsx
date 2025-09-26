@@ -362,7 +362,7 @@ Telefon: ${customerForContract.phone}
 3. Tato smlouva je vyhotovena elektronicky. Nájemce svým digitálním podpisem stvrzuje, že se seznámil s obsahem smlouvy, souhlasí s ním a vozidlo v uvedeném stavu přebírá.
 
 Digitální podpis nájemce:
-(viz přiložený obrazový soubor)
+%%SIGNATURE_IMAGE%%
                 `.trim();
                 
                 await actions.addContract({
@@ -371,7 +371,7 @@ Digitální podpis nájemce:
                     vehicleId: selectedVehicleId,
                     generatedAt: new Date(),
                     contractText,
-                });
+                }, signatureDataUrl);
 
                 setGeneratedContractInfo({ contractText, customerEmail: customerForContract.email, vehicleName: contractVehicle.name });
                 setIsConfirmationModalOpen(true);

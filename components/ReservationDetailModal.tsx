@@ -26,8 +26,8 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
     
     // Departure state
     const [startMileage, setStartMileage] = useState<string>('');
-    const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
-    const [signatureDataUrl, setSignatureDataUrl] = useState('');
+    const [isDepartureSignatureModalOpen, setIsDepartureSignatureModalOpen] = useState(false);
+    const [departureSignatureDataUrl, setDepartureSignatureDataUrl] = useState('');
     
     // Arrival (protocol) state
     const [endMileage, setEndMileage] = useState<string>('');
@@ -35,7 +35,8 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
     const [fuelLevel, setFuelLevel] = useState('');
     const [cleanliness, setCleanliness] = useState('');
     const [keysAndDocsOk, setKeysAndDocsOk] = useState(true);
-    const [customerAgreed, setCustomerAgreed] = useState(false);
+    const [isReturnSignatureModalOpen, setIsReturnSignatureModalOpen] = useState(false);
+    const [returnSignatureDataUrl, setReturnSignatureDataUrl] = useState('');
 
     // Damage reporting state
     const [newDamages, setNewDamages] = useState<NewDamage[]>([]);
@@ -52,12 +53,12 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
             setFuelLevel('');
             setCleanliness('');
             setKeysAndDocsOk(true);
-            setCustomerAgreed(false);
             setNewDamages([]);
             setDamageDescription('');
             setDamageLocation('');
             setDamageImageFile(null);
-            setSignatureDataUrl('');
+            setDepartureSignatureDataUrl('');
+            setReturnSignatureDataUrl('');
         }
     }, [isOpen, reservation]);
 
@@ -96,9 +97,14 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
         );
     }
     
-    const handleSaveSignature = (dataUrl: string) => {
-        setSignatureDataUrl(dataUrl);
-        setIsSignatureModalOpen(false);
+    const handleSaveDepartureSignature = (dataUrl: string) => {
+        setDepartureSignatureDataUrl(dataUrl);
+        setIsDepartureSignatureModalOpen(false);
+    };
+    
+    const handleSaveReturnSignature = (dataUrl: string) => {
+        setReturnSignatureDataUrl(dataUrl);
+        setIsReturnSignatureModalOpen(false);
     };
 
     const handleAddDamage = () => {
@@ -129,18 +135,18 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                     setIsProcessing(false);
                     return;
                 }
-                if (!signatureDataUrl) {
+                if (!departureSignatureDataUrl) {
                     alert('Při předání vozidla je vyžadován podpis zákazníka.');
                     setIsProcessing(false);
                     return;
                 }
-                await actions.activateReservation(reservation.id, Number(startMileage), signatureDataUrl);
+                await actions.activateReservation(reservation.id, Number(startMileage), departureSignatureDataUrl);
 
             } else if (isArrival) {
                 if (!endMileage || Number(endMileage) <= (reservation.startMileage ?? 0)) { alert('Konečný stav tachometru musí být větší než počáteční.'); setIsProcessing(false); return; }
                 if (!fuelLevel) { alert('Vyberte prosím stav paliva.'); setIsProcessing(false); return; }
                 if (!cleanliness) { alert('Vyberte prosím stav čistoty vozidla.'); setIsProcessing(false); return; }
-                if (!customerAgreed) { alert('Zákazník musí souhlasit s protokolem.'); setIsProcessing(false); return; }
+                if (!returnSignatureDataUrl) { alert('Protokol musí být podepsán zákazníkem.'); setIsProcessing(false); return; }
                 
                 // 1. Save all reported damages first
                 for (const damage of newDamages) {
@@ -148,8 +154,8 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                 }
 
                 // 2. Prepare protocol data and complete reservation
-                const protocolData: ProtocolData = { notes, fuelLevel, cleanliness, keysAndDocsOk, customerAgreed };
-                await actions.completeReservation(reservation.id, Number(endMileage), protocolData);
+                const protocolData: ProtocolData = { notes, fuelLevel, cleanliness, keysAndDocsOk, customerAgreed: true }; // Agreement is now signature
+                await actions.completeReservation(reservation.id, Number(endMileage), protocolData, returnSignatureDataUrl);
             }
             onClose();
         } catch (error) {
@@ -178,7 +184,8 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
     
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start z-50 py-10 overflow-y-auto">
-            <SignatureModal isOpen={isSignatureModalOpen} onClose={() => setIsSignatureModalOpen(false)} onSave={handleSaveSignature} />
+            <SignatureModal isOpen={isDepartureSignatureModalOpen} onClose={() => setIsDepartureSignatureModalOpen(false)} onSave={handleSaveDepartureSignature} />
+            <SignatureModal isOpen={isReturnSignatureModalOpen} onClose={() => setIsReturnSignatureModalOpen(false)} onSave={handleSaveReturnSignature} />
             <div className="bg-white rounded-lg shadow-2xl p-8 w-full max-w-3xl">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-2xl font-bold">
@@ -216,14 +223,14 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                             </div>
                             <div>
                                 <h3 className="font-semibold text-gray-500 flex items-center mb-2"><Signature className="w-4 h-4 mr-2" />Podpis zákazníka</h3>
-                                {signatureDataUrl ? (
+                                {departureSignatureDataUrl ? (
                                      <div className="border border-gray-300 rounded-lg p-4 flex items-center justify-between bg-green-50">
                                          <p className="font-semibold text-green-700">Podpis uložen</p>
-                                         <div className="bg-white p-1 border rounded"><img src={signatureDataUrl} alt="Podpis" className="h-12 w-auto" /></div>
-                                         <button type="button" onClick={() => setIsSignatureModalOpen(true)} className="flex items-center py-2 px-3 rounded-md font-semibold bg-gray-200 hover:bg-gray-300 text-sm"><Edit className="w-4 h-4 mr-2" /> Změnit</button>
+                                         <div className="bg-white p-1 border rounded"><img src={departureSignatureDataUrl} alt="Podpis" className="h-12 w-auto" /></div>
+                                         <button type="button" onClick={() => setIsDepartureSignatureModalOpen(true)} className="flex items-center py-2 px-3 rounded-md font-semibold bg-gray-200 hover:bg-gray-300 text-sm"><Edit className="w-4 h-4 mr-2" /> Změnit</button>
                                      </div>
                                 ) : (
-                                    <button type="button" onClick={() => setIsSignatureModalOpen(true)} className="w-full py-4 px-6 border-2 border-dashed border-gray-400 rounded-lg text-gray-600 hover:bg-gray-50 hover:border-primary flex items-center justify-center transition-colors">
+                                    <button type="button" onClick={() => setIsDepartureSignatureModalOpen(true)} className="w-full py-4 px-6 border-2 border-dashed border-gray-400 rounded-lg text-gray-600 hover:bg-gray-50 hover:border-primary flex items-center justify-center transition-colors">
                                         <Signature className="mr-3 w-6 h-6"/>
                                         <span className="font-bold text-lg">Otevřít pro podpis</span>
                                     </button>
@@ -275,19 +282,18 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                             <div className="bg-red-50 border border-red-200 p-4 rounded-lg space-y-3"><h3 className="font-semibold text-red-800 flex items-center"><ShieldAlert className="w-5 h-5 mr-2" /> Záznam o novém poškození</h3>{/* Damage Form & List */}</div>
                             
                             <div className="border-t pt-4">
-                                <h3 className="font-semibold text-gray-500 mb-2 flex items-center"><CheckSquare className="w-5 h-5 mr-2" /> Souhlas zákazníka</h3>
-                                <div className="flex items-start bg-gray-50 p-4 rounded-md border">
-                                    <input
-                                        id="customerAgreement"
-                                        type="checkbox"
-                                        checked={customerAgreed}
-                                        onChange={e => setCustomerAgreed(e.target.checked)}
-                                        className="h-5 w-5 rounded text-primary focus:ring-primary border-gray-300 mt-1"
-                                    />
-                                    <label htmlFor="customerAgreement" className="ml-3 text-sm text-gray-700">
-                                        Zákazník souhlasí se stavem vozidla, vyúčtováním a obsahem tohoto protokolu.
-                                    </label>
-                                </div>
+                                <h3 className="font-semibold text-gray-500 mb-2 flex items-center"><Signature className="w-5 h-5 mr-2" /> Podpis zákazníka a souhlas</h3>
+                                {returnSignatureDataUrl ? (
+                                     <div className="border border-gray-300 rounded-lg p-4 flex items-center justify-between bg-green-50">
+                                         <p className="font-semibold text-green-700">Podpis uložen. Zákazník stvrzuje souhlas s protokolem.</p>
+                                         <button type="button" onClick={() => setIsReturnSignatureModalOpen(true)} className="flex items-center py-2 px-3 rounded-md font-semibold bg-gray-200 hover:bg-gray-300 text-sm"><Edit className="w-4 h-4 mr-2" /> Změnit</button>
+                                     </div>
+                                ) : (
+                                    <button type="button" onClick={() => setIsReturnSignatureModalOpen(true)} className="w-full py-4 px-6 border-2 border-dashed border-gray-400 rounded-lg text-gray-600 hover:bg-gray-50 hover:border-primary flex items-center justify-center transition-colors">
+                                        <Signature className="mr-3 w-6 h-6"/>
+                                        <span className="font-bold text-lg">Otevřít pro podpis (potvrzuje souhlas)</span>
+                                    </button>
+                                )}
                             </div>
                         </div>
                     )}
@@ -309,7 +315,7 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                         {(isDeparture || isArrival) && (
                             <button
                                 onClick={handleAction}
-                                disabled={isProcessing || (isArrival && !customerAgreed) || (isDeparture && !signatureDataUrl)}
+                                disabled={isProcessing || (isArrival && !returnSignatureDataUrl) || (isDeparture && !departureSignatureDataUrl)}
                                 className={`py-2 px-6 rounded-lg text-white font-semibold transition-colors ${isDeparture ? 'bg-green-500 hover:bg-green-600' : 'bg-primary hover:bg-primary-hover'} disabled:bg-gray-400 disabled:cursor-not-allowed`}
                             >
                                 {isProcessing ? 'Zpracovávám...' : (isDeparture ? 'Potvrdit vydání' : 'Uložit protokol a dokončit')}

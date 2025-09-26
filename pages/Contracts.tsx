@@ -58,9 +58,10 @@ const Contracts: React.FC = () => {
 
                 <div className="mt-4">
                     <h3 className="font-bold text-lg mb-2">Plné znění smlouvy</h3>
-                    <pre className="whitespace-pre-wrap bg-gray-100 p-4 rounded-md text-sm font-mono border overflow-auto max-h-96">
-                        {selectedContract.contractText}
-                    </pre>
+                    <pre
+                        className="whitespace-pre-wrap bg-gray-100 p-4 rounded-md text-sm font-mono border overflow-auto max-h-96"
+                        dangerouslySetInnerHTML={{ __html: selectedContract.contractText }}
+                    />
                 </div>
 
                 <div className="mt-8 text-right">

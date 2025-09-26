@@ -38,8 +38,8 @@ interface DataContextActions {
     approveReservation: (reservationId: string) => Promise<void>;
     rejectReservation: (reservationId: string) => Promise<void>;
     activateReservation: (reservationId: string, startMileage: number, signatureDataUrl: string) => Promise<void>;
-    completeReservation: (reservationId: string, endMileage: number, protocolData: ProtocolData) => Promise<void>;
-    addContract: (contractData: Omit<Contract, 'id'>) => Promise<void>;
+    completeReservation: (reservationId: string, endMileage: number, protocolData: ProtocolData, signatureDataUrl: string) => Promise<void>;
+    addContract: (contractData: Omit<Contract, 'id'>, signatureDataUrl: string) => Promise<void>;
     addExpense: (expenseData: { description: string; amount: number; date: Date; }) => Promise<void>;
     addService: (serviceData: Omit<VehicleService, 'id'>) => Promise<void>;
     updateService: (serviceId: string, updates: Partial<VehicleService>) => Promise<void>;
@@ -190,6 +190,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsVehicleFormModalOpen(false);
         setVehicleBeingEdited(null);
     }, []);
+    
+    const uploadSignature = async (dataUrl: string, reservationId: string, type: 'takeover' | 'return'): Promise<string> => {
+        if (!dataUrl) return '';
+        const fetchRes = await fetch(dataUrl);
+        const blob = await fetchRes.blob();
+        const signatureFile = new File([blob], `signature_${type}_${reservationId}.png`, { type: 'image/png' });
+        return await api.uploadFile('signatures', `${Date.now()}_${signatureFile.name}`, signatureFile);
+    };
 
     const actions = useMemo((): DataContextActions => ({
         refreshData,
@@ -245,16 +253,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const reservation = data.reservations.find(r => r.id === reservationId);
             if (!reservation || !reservation.customer || !reservation.vehicle) throw new Error("Rezervace nebo její detaily nebyly nalezeny.");
         
-            // 1. Upload signature
-            let signatureUrl = '';
-            if (signatureDataUrl) {
-                const fetchRes = await fetch(signatureDataUrl);
-                const blob = await fetchRes.blob();
-                const signatureFile = new File([blob], `signature_takeover_${reservationId}.png`, { type: 'image/png' });
-                signatureUrl = await api.uploadFile('signatures', `${Date.now()}_${signatureFile.name}`, signatureFile);
-            }
-        
-            // 2. Generate and save departure protocol
+            const signatureUrl = await uploadSignature(signatureDataUrl, reservationId, 'takeover');
+            const signatureHtml = `<br/><img src="${signatureUrl}" alt="Podpis" style="max-height: 80px; margin-top: 10px;" />`;
+
             const departureProtocolText = `
 PROTOKOL O PŘEDÁNÍ VOZIDLA
 =========================================
@@ -270,8 +271,7 @@ Stav čistoty: Čisté
 
 --- PROHLÁŠENÍ ---
 Zákazník svým podpisem potvrzuje, že vozidlo převzal v řádném technickém stavu, bez zjevných závad, s kompletní povinnou výbavou a seznámil se s podmínkami smlouvy o nájmu.
-
-Podpis je přiložen digitálně.
+${signatureHtml}
             `.trim();
         
             await api.addHandoverProtocol({
@@ -283,7 +283,6 @@ Podpis je přiložen digitálně.
                 signatureUrl: signatureUrl,
             });
         
-            // 3. Generate contract if it doesn't exist (typical for online reservations)
             const contractExists = data.contracts.some(c => c.reservationId === reservationId);
             if (!contractExists) {
                 const { customer: customerForContract, vehicle: contractVehicle, startDate, endDate } = reservation;
@@ -347,18 +346,17 @@ Telefon: ${customerForContract.phone}
                 });
             }
         
-            // 4. Update reservation and vehicle status
             await api.updateReservation(reservationId, { status: 'active', startMileage });
             await api.updateVehicle({ ...reservation.vehicle, status: 'rented', currentMileage: startMileage });
-        
-            // 5. Refresh all data
             await refreshData();
         },
-        completeReservation: async (reservationId, endMileage, protocolData) => {
+        completeReservation: async (reservationId, endMileage, protocolData, signatureDataUrl) => {
             const reservation = data.reservations.find(r => r.id === reservationId);
             if (!reservation || !reservation.vehicle || !reservation.customer) throw new Error("Reservation not found or is incomplete");
             
-            // 1. Calculate mileage details
+            const returnSignatureUrl = await uploadSignature(signatureDataUrl, reservationId, 'return');
+            const signatureHtml = `<br/><img src="${returnSignatureUrl}" alt="Podpis při vrácení" style="max-height: 80px; margin-top: 10px;" />`;
+
             const startKm = reservation.startMileage || 0;
             const kmDriven = endMileage > startKm ? endMileage - startKm : 0;
             const durationMs = new Date(reservation.endDate).getTime() - new Date(reservation.startDate).getTime();
@@ -367,7 +365,6 @@ Telefon: ${customerForContract.phone}
             const kmOver = Math.max(0, kmDriven - kmLimit);
             const extraCharge = kmOver * 3;
 
-            // 2. Generate protocol text
             const protocolText = `
 PŘEDÁVACÍ PROTOKOL - VRÁCENÍ VOZIDLA
 =========================================
@@ -394,24 +391,23 @@ ${protocolData.notes || 'Žádné.'}
 ---------------------------------
 Nová poškození nahlášená při tomto vrácení jsou zaznamenána samostatně v historii poškození vozidla.
 
---- SOUHLAS ZÁKAZNIKA ---
-Zákazník digitálně odsouhlasil obsah tohoto protokolu dne ${new Date().toLocaleString('cs-CZ')}.
+--- SOUHLAS A PODPIS ZÁKAZNÍKA ---
+Zákazník souhlasí se stavem vozidla, vyúčtováním a obsahem tohoto protokolu, což stvrzuje svým podpisem.
+${signatureHtml}
 `.trim();
 
-            // 3. Create handover protocol (without signature URL)
             await api.addHandoverProtocol({
                 reservationId: reservation.id,
                 customerId: reservation.customerId,
                 vehicleId: reservation.vehicleId,
                 generatedAt: new Date(),
                 protocolText,
+                signatureUrl: returnSignatureUrl,
             });
 
-            // 4. Update reservation and vehicle
             await api.updateReservation(reservationId, { status: 'completed', endMileage, notes: protocolData.notes });
             await api.updateVehicle({ ...reservation.vehicle, status: 'available', currentMileage: endMileage });
 
-            // 5. Add financial transaction for rental price + extra charges
             const start = new Date(reservation.startDate);
             const end = new Date(reservation.endDate);
             const durationHours = (end.getTime() - start.getTime()) / (1000 * 3600);
@@ -432,11 +428,14 @@ Zákazník digitálně odsouhlasil obsah tohoto protokolu dne ${new Date().toLoc
                 reservationId,
             });
 
-            // 6. Refresh all data
             await refreshData();
         },
-        addContract: async (contractData) => {
-             const newContract = await api.addContract(contractData);
+        addContract: async (contractData, signatureDataUrl) => {
+             const signatureUrl = await uploadSignature(signatureDataUrl, contractData.reservationId, 'takeover');
+             const signatureHtml = `<br/><img src="${signatureUrl}" alt="Podpis" style="max-height: 80px; margin-top: 10px;" />`;
+             const contractTextWithSignature = contractData.contractText.replace('%%SIGNATURE_IMAGE%%', signatureHtml);
+
+             const newContract = await api.addContract({ ...contractData, contractText: contractTextWithSignature });
              setData(prev => expandData({ ...prev, contracts: [...prev.contracts, newContract] }));
         },
         addExpense: async (expenseData) => {
