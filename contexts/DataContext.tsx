@@ -296,7 +296,7 @@ ${signatureHtml}
                 else if (durationHours <= 12) rentalPrice = contractVehicle.rate12h;
                 else rentalPrice = Math.ceil(durationHours / 24) * contractVehicle.dailyRate;
         
-                const contractText = `
+                const contractTextTemplate = `
 SMLOUVA O NÁJMU DOPRAVNÍHO PROSTŘEDKU
 =========================================
 Článek I. - Smluvní strany
@@ -307,6 +307,7 @@ Ghegova 117, Brno Nové Sady, 60200
 Web: pujcimedodavky.cz
 IČO: 07031653
 (dále jen "pronajímatel")
+
 Nájemce:
 Jméno: ${customerForContract.firstName} ${customerForContract.lastName}
 Adresa: ${customerForContract.address}
@@ -315,36 +316,47 @@ Email: ${customerForContract.email}
 Telefon: ${customerForContract.phone}
 Číslo ŘP: ${customerForContract.driverLicenseNumber}
 (dále jen "nájemce")
+
 Článek II. - Předmět a účel nájmu
 -----------------------------------------
 1. Vozidlo: ${contractVehicle.name} (${contractVehicle.make} ${contractVehicle.model}), SPZ: ${contractVehicle.licensePlate}, Rok výroby: ${contractVehicle.year}
+
 Článek III. - Doba nájmu a cena
 -----------------------------------------
 1. Doba nájmu: ${start.toLocaleString('cs-CZ')} - ${end.toLocaleString('cs-CZ')}.
 2. Cena nájmu: ${rentalPrice.toLocaleString('cs-CZ')} Kč.
 3. Denní limit: 300 km. Poplatek nad limit: 3 Kč/km. Počáteční stav km: ${startMileage.toLocaleString('cs-CZ')} km.
+
 Článek IV. - Vratná kauce (jistota)
 -----------------------------------------
 1. Kauce: 5.000 Kč.
+
 Článek V. - Práva a povinnosti stran
 -----------------------------------------
 1. Zákaz kouření ve vozidle (pokuta 500 Kč).
 2. Vozidlo se vrací s plnou nádrží (jinak náklady na dotankování + pokuta 500 Kč).
+
 Článek VI. - Odpovědnost za škodu a spoluúčast
 -----------------------------------------
 1. Spoluúčast při poškození vozidla: 5.000 Kč.
 2. Spoluúčast při nehodě s poškozením třetích stran: 10.000 Kč.
+
 Článek VII. - Závěrečná ustanovení
 -----------------------------------------
 1. Tato smlouva je vyhotovena elektronicky. Nájemce se seznámil s obsahem smlouvy, souhlasí s ním a stvrzuje svůj souhlas digitálním podpisem na Protokolu o předání vozidla.
+
+Digitální podpis nájemce:
+%%SIGNATURE_IMAGE%%
                 `.trim().replace(/^\s+/gm, '');
-        
+                
+                const contractTextWithSignature = contractTextTemplate.replace('%%SIGNATURE_IMAGE%%', signatureHtml);
+
                 await api.addContract({
                     reservationId: reservation.id,
                     customerId: reservation.customerId,
                     vehicleId: reservation.vehicleId,
                     generatedAt: new Date(),
-                    contractText,
+                    contractText: contractTextWithSignature,
                 });
             }
         
