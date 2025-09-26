@@ -177,6 +177,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
     }, [session, refreshData]);
 
+    const openVehicleFormModal = useCallback((vehicle: Partial<Vehicle> | null) => {
+        setVehicleBeingEdited(vehicle);
+        setIsVehicleFormModalOpen(true);
+    }, []);
+
+    const closeVehicleFormModal = useCallback(() => {
+        setIsVehicleFormModalOpen(false);
+        setVehicleBeingEdited(null);
+    }, []);
+
     const actions = useMemo((): DataContextActions => ({
         refreshData,
         signOut: api.signOut,
@@ -204,14 +214,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 vehicles: prev.vehicles.map(v => v.id === updatedVehicle.id ? updatedVehicle : v)
             }));
         },
-        openVehicleFormModal: useCallback((vehicle: Partial<Vehicle> | null) => {
-            setVehicleBeingEdited(vehicle);
-            setIsVehicleFormModalOpen(true);
-        }, []),
-        closeVehicleFormModal: useCallback(() => {
-            setIsVehicleFormModalOpen(false);
-            setVehicleBeingEdited(null);
-        }, []),
+        openVehicleFormModal,
+        closeVehicleFormModal,
         addReservation: async (resData) => {
             const newReservation = await api.addReservation(resData);
             setData(prev => expandData({ ...prev, reservations: [...prev.reservations, newReservation] }));
@@ -444,7 +448,7 @@ Zákazník digitálně odsouhlasil obsah tohoto protokolu dne ${new Date().toLoc
             setData(prev => expandData({ ...prev, invoices: [...prev.invoices, newInvoice] }));
             return newInvoice;
         },
-    }), [data, refreshData]);
+    }), [data, refreshData, openVehicleFormModal, closeVehicleFormModal]);
 
     const value = { data, loading: authLoading || (!!session && dataLoading), actions, session, isVehicleFormModalOpen, vehicleBeingEdited };
 
