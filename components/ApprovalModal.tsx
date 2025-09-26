@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Reservation, Page } from '../types';
 import { useData } from '../contexts/DataContext';
 import { X, Check, Trash2, Car, Calendar, User, Mail, Phone, Loader, Edit } from 'lucide-react';
+import ConfirmationModal from './ConfirmationModal';
 
 interface ApprovalModalProps {
     isOpen: boolean;
@@ -13,11 +14,15 @@ interface ApprovalModalProps {
 const ApprovalModal: React.FC<ApprovalModalProps> = ({ isOpen, onClose, reservations, onNavigateToPage }) => {
     const { actions } = useData();
     const [processingId, setProcessingId] = useState<string | null>(null);
+    const [confirmationInfo, setConfirmationInfo] = useState<{ contractId: string; customerEmail: string; vehicleName: string; } | null>(null);
 
     const handleApprove = async (id: string) => {
         setProcessingId(id);
         try {
-            await actions.approveReservation(id);
+            const contractInfo = await actions.approveReservation(id);
+            if (contractInfo) {
+                setConfirmationInfo(contractInfo);
+            }
         } catch (error) {
             console.error("Failed to approve reservation:", error);
             alert("Schválení se nezdařilo.");
@@ -45,6 +50,10 @@ const ApprovalModal: React.FC<ApprovalModalProps> = ({ isOpen, onClose, reservat
         onNavigateToPage(Page.RESERVATIONS);
         onClose();
     };
+    
+    const handleCloseConfirmation = () => {
+        setConfirmationInfo(null);
+    };
 
     // If reservations list becomes empty, close the modal automatically
     React.useEffect(() => {
@@ -58,6 +67,11 @@ const ApprovalModal: React.FC<ApprovalModalProps> = ({ isOpen, onClose, reservat
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-start z-50 pt-10 pb-10 overflow-y-auto">
+            <ConfirmationModal 
+                isOpen={!!confirmationInfo}
+                onClose={handleCloseConfirmation}
+                contractInfo={confirmationInfo}
+            />
             <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-4xl">
                 <div className="flex justify-between items-center mb-4 border-b pb-4">
                     <h2 className="text-2xl font-bold text-gray-800">Rezervace ke schválení ({reservations.length})</h2>

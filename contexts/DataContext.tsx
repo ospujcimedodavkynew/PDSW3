@@ -35,11 +35,12 @@ interface DataContextActions {
     closeVehicleFormModal: () => void;
     addReservation: (reservationData: Omit<Reservation, 'id' | 'status'>) => Promise<Reservation>;
     updateReservation: (reservationId: string, updates: Partial<Reservation>) => Promise<void>;
-    approveReservation: (reservationId: string) => Promise<void>;
+    approveReservation: (reservationId: string) => Promise<{ contractId: string; customerEmail: string; vehicleName: string; } | null>;
     rejectReservation: (reservationId: string) => Promise<void>;
     activateReservation: (reservationId: string, startMileage: number, signatureDataUrl: string) => Promise<void>;
     completeReservation: (reservationId: string, endMileage: number, protocolData: ProtocolData, signatureDataUrl: string) => Promise<void>;
     addContract: (contractData: Omit<Contract, 'id'>, signatureDataUrl: string) => Promise<Contract>;
+    updateContract: (contractId: string, updates: Partial<Contract>) => Promise<void>;
     addExpense: (expenseData: { description: string; amount: number; date: Date; }) => Promise<void>;
     addService: (serviceData: Omit<VehicleService, 'id'>) => Promise<void>;
     updateService: (serviceId: string, updates: Partial<VehicleService>) => Promise<void>;
@@ -244,8 +245,102 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
         },
         approveReservation: async (reservationId) => {
+            const reservation = data.reservations.find(r => r.id === reservationId);
+            if (!reservation || !reservation.customer || !reservation.vehicle) {
+                throw new Error("Detaily rezervace nebyly pro schválení nalezeny.");
+            }
+        
+            const contractExists = data.contracts.some(c => c.reservationId === reservationId);
+            if (contractExists) {
+                await api.updateReservation(reservationId, { status: 'scheduled' });
+                await refreshData();
+                const existingContract = data.contracts.find(c => c.reservationId === reservationId)!;
+                return {
+                    contractId: existingContract.id,
+                    customerEmail: reservation.customer.email,
+                    vehicleName: reservation.vehicle.name,
+                };
+            }
+        
+            const start = new Date(reservation.startDate);
+            const end = new Date(reservation.endDate);
+            const durationHours = (end.getTime() - start.getTime()) / (1000 * 3600);
+            let rentalPrice = 0;
+            if (durationHours <= 4) rentalPrice = reservation.vehicle.rate4h;
+            else if (durationHours <= 12) rentalPrice = reservation.vehicle.rate12h;
+            else rentalPrice = Math.ceil(durationHours / 24) * reservation.vehicle.dailyRate;
+        
+            const contractTextTemplate = `
+SMLOUVA O NÁJMU DOPRAVNÍHO PROSTŘEDKU
+=========================================
+Článek I. - Smluvní strany
+-----------------------------------------
+Pronajímatel:
+Milan Gula
+Ghegova 117, Brno Nové Sady, 60200
+Web: pujcimedodavky.cz
+IČO: 07031653
+(dále jen "pronajímatel")
+
+Nájemce:
+Jméno: ${reservation.customer.firstName} ${reservation.customer.lastName}
+Adresa: ${reservation.customer.address}
+${reservation.customer.ico ? `IČO: ${reservation.customer.ico}` : ''}
+Email: ${reservation.customer.email}
+Telefon: ${reservation.customer.phone}
+Číslo ŘP: ${reservation.customer.driverLicenseNumber}
+(dále jen "nájemce")
+
+Článek II. - Předmět a účel nájmu
+-----------------------------------------
+1. Vozidlo: ${reservation.vehicle.name} (${reservation.vehicle.make} ${reservation.vehicle.model}), SPZ: ${reservation.vehicle.licensePlate}, Rok výroby: ${reservation.vehicle.year}
+
+Článek III. - Doba nájmu a cena
+-----------------------------------------
+1. Doba nájmu: ${start.toLocaleString('cs-CZ')} - ${end.toLocaleString('cs-CZ')}.
+2. Cena nájmu: ${rentalPrice.toLocaleString('cs-CZ')} Kč.
+3. Denní limit: 300 km. Poplatek nad limit: 3 Kč/km.
+
+Článek IV. - Vratná kauce (jistota)
+-----------------------------------------
+1. Kauce: 5.000 Kč.
+
+Článek V. - Práva a povinnosti stran
+-----------------------------------------
+1. Zákaz kouření ve vozidle (pokuta 500 Kč).
+2. Vozidlo se vrací s plnou nádrží (jinak náklady na dotankování + pokuta 500 Kč).
+
+Článek VI. - Odpovědnost za škodu a spoluúčast
+-----------------------------------------
+1. Spoluúčast při poškození vozidla: 5.000 Kč.
+2. Spoluúčast při nehodě s poškozením třetích stran: 10.000 Kč.
+
+Článek VII. - Závěrečná ustanovení
+-----------------------------------------
+1. Tato smlouva je vyhotovena elektronicky. Nájemce se seznámil s obsahem smlouvy, souhlasí s ním a stvrzuje svůj souhlas digitálním podpisem na Protokolu o předání vozidla.
+
+Digitální podpis nájemce:
+%%SIGNATURE_IMAGE%%
+            `.trim().replace(/^\s+/gm, '');
+        
+            const contractTextWithPlaceholder = contractTextTemplate.replace('%%SIGNATURE_IMAGE%%', '(Bude podepsáno digitálně při převzetí vozidla)');
+        
+            const newContract = await api.addContract({
+                reservationId: reservation.id,
+                customerId: reservation.customerId,
+                vehicleId: reservation.vehicleId,
+                generatedAt: new Date(),
+                contractText: contractTextWithPlaceholder,
+            });
+        
             await api.updateReservation(reservationId, { status: 'scheduled' });
             await refreshData();
+        
+            return {
+                contractId: newContract.id,
+                customerEmail: reservation.customer.email,
+                vehicleName: reservation.vehicle.name,
+            };
         },
         rejectReservation: async (reservationId) => {
             await api.deleteReservation(reservationId);
@@ -257,7 +352,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
             const signatureUrl = await uploadSignature(signatureDataUrl, reservationId, 'takeover');
             const signatureHtml = `<br/><img src="${signatureUrl}" alt="Podpis" style="max-height: 80px; margin-top: 10px;" />`;
-
+        
+            // Update the existing contract with the signature
+            const contract = data.contracts.find(c => c.reservationId === reservationId);
+            if (contract) {
+                const updatedText = contract.contractText
+                    .replace('(Bude podepsáno digitálně při převzetí vozidla)', signatureHtml)
+                    .replace('%%SIGNATURE_IMAGE%%', signatureHtml); // Also replace the original placeholder for robustness
+                await actions.updateContract(contract.id, { contractText: updatedText });
+            }
+        
             const departureProtocolText = `
 PROTOKOL O PŘEDÁNÍ VOZIDLA
 =========================================
@@ -284,81 +388,6 @@ ${signatureHtml}
                 protocolText: departureProtocolText,
                 signatureUrl: signatureUrl,
             });
-        
-            const contractExists = data.contracts.some(c => c.reservationId === reservationId);
-            if (!contractExists) {
-                const { customer: customerForContract, vehicle: contractVehicle, startDate, endDate } = reservation;
-                const start = new Date(startDate);
-                const end = new Date(endDate);
-                const durationHours = (end.getTime() - start.getTime()) / (1000 * 3600);
-                let rentalPrice = 0;
-                if (durationHours <= 4) rentalPrice = contractVehicle.rate4h;
-                else if (durationHours <= 12) rentalPrice = contractVehicle.rate12h;
-                else rentalPrice = Math.ceil(durationHours / 24) * contractVehicle.dailyRate;
-        
-                const contractTextTemplate = `
-SMLOUVA O NÁJMU DOPRAVNÍHO PROSTŘEDKU
-=========================================
-Článek I. - Smluvní strany
------------------------------------------
-Pronajímatel:
-Milan Gula
-Ghegova 117, Brno Nové Sady, 60200
-Web: pujcimedodavky.cz
-IČO: 07031653
-(dále jen "pronajímatel")
-
-Nájemce:
-Jméno: ${customerForContract.firstName} ${customerForContract.lastName}
-Adresa: ${customerForContract.address}
-${customerForContract.ico ? `IČO: ${customerForContract.ico}` : ''}
-Email: ${customerForContract.email}
-Telefon: ${customerForContract.phone}
-Číslo ŘP: ${customerForContract.driverLicenseNumber}
-(dále jen "nájemce")
-
-Článek II. - Předmět a účel nájmu
------------------------------------------
-1. Vozidlo: ${contractVehicle.name} (${contractVehicle.make} ${contractVehicle.model}), SPZ: ${contractVehicle.licensePlate}, Rok výroby: ${contractVehicle.year}
-
-Článek III. - Doba nájmu a cena
------------------------------------------
-1. Doba nájmu: ${start.toLocaleString('cs-CZ')} - ${end.toLocaleString('cs-CZ')}.
-2. Cena nájmu: ${rentalPrice.toLocaleString('cs-CZ')} Kč.
-3. Denní limit: 300 km. Poplatek nad limit: 3 Kč/km. Počáteční stav km: ${startMileage.toLocaleString('cs-CZ')} km.
-
-Článek IV. - Vratná kauce (jistota)
------------------------------------------
-1. Kauce: 5.000 Kč.
-
-Článek V. - Práva a povinnosti stran
------------------------------------------
-1. Zákaz kouření ve vozidle (pokuta 500 Kč).
-2. Vozidlo se vrací s plnou nádrží (jinak náklady na dotankování + pokuta 500 Kč).
-
-Článek VI. - Odpovědnost za škodu a spoluúčast
------------------------------------------
-1. Spoluúčast při poškození vozidla: 5.000 Kč.
-2. Spoluúčast při nehodě s poškozením třetích stran: 10.000 Kč.
-
-Článek VII. - Závěrečná ustanovení
------------------------------------------
-1. Tato smlouva je vyhotovena elektronicky. Nájemce se seznámil s obsahem smlouvy, souhlasí s ním a stvrzuje svůj souhlas digitálním podpisem na Protokolu o předání vozidla.
-
-Digitální podpis nájemce:
-%%SIGNATURE_IMAGE%%
-                `.trim().replace(/^\s+/gm, '');
-                
-                const contractTextWithSignature = contractTextTemplate.replace('%%SIGNATURE_IMAGE%%', signatureHtml);
-
-                await api.addContract({
-                    reservationId: reservation.id,
-                    customerId: reservation.customerId,
-                    vehicleId: reservation.vehicleId,
-                    generatedAt: new Date(),
-                    contractText: contractTextWithSignature,
-                });
-            }
         
             await api.updateReservation(reservationId, { status: 'active', startMileage });
             await api.updateVehicle({ ...reservation.vehicle, status: 'rented', currentMileage: startMileage });
@@ -452,6 +481,13 @@ ${signatureHtml}
              const newContract = await api.addContract({ ...contractData, contractText: contractTextWithSignature });
              setData(prev => expandData({ ...prev, contracts: [...prev.contracts, newContract] }));
              return newContract;
+        },
+        updateContract: async (contractId, updates) => {
+            const updatedContract = await api.updateContract(contractId, updates);
+            setData(prev => expandData({
+                ...prev,
+                contracts: prev.contracts.map(c => c.id === updatedContract.id ? { ...c, ...updatedContract } : c)
+            }));
         },
         addExpense: async (expenseData) => {
             const newExpense = await api.addFinancialTransaction({ ...expenseData, type: 'expense' });

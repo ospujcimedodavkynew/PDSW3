@@ -484,6 +484,11 @@ export const addContract = async (contractData: Omit<Contract, 'id'>): Promise<C
     return fromContract(handleSupabaseError({ data, error }, 'add contract'));
 };
 
+export const updateContract = async (contractId: string, updates: Partial<Contract>): Promise<Contract> => {
+    const { data, error } = await supabase.from('contracts').update(toContract(updates)).eq('id', contractId).select().single();
+    return fromContract(handleSupabaseError({ data, error }, 'update contract'));
+};
+
 export const addHandoverProtocol = async (protocolData: Omit<HandoverProtocol, 'id'>): Promise<HandoverProtocol> => {
     const { data, error } = await supabase.from('handover_protocols').insert([toHandoverProtocol(protocolData)]).select().single();
     return fromHandoverProtocol(handleSupabaseError({ data, error }, 'add handover protocol'));
