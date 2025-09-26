@@ -71,6 +71,109 @@ export const useData = () => {
     return context;
 };
 
+// --- CENTRALIZED HELPER FUNCTIONS ---
+
+export const calculateTotalPrice = (vehicle: Vehicle, startDate: Date, endDate: Date): number => {
+    if (!vehicle || !startDate || !endDate) return 0;
+    if (endDate <= startDate) return 0;
+
+    const durationHours = (endDate.getTime() - startDate.getTime()) / (1000 * 3600);
+    
+    if (durationHours <= 4) return vehicle.rate4h;
+    if (durationHours <= 12) return vehicle.rate12h;
+    const days = Math.ceil(durationHours / 24);
+    return days * vehicle.dailyRate;
+};
+
+interface ContractTemplateData {
+    customer: Customer;
+    vehicle: Vehicle;
+    startDate: Date;
+    endDate: Date;
+    totalPrice: number;
+}
+
+export const generateContractText = (
+    templateData: ContractTemplateData,
+    signaturePlaceholder: 'image_placeholder' | 'text_placeholder'
+): string => {
+    const { customer, vehicle, startDate, endDate, totalPrice } = templateData;
+
+    const signatureSection = signaturePlaceholder === 'image_placeholder'
+        ? `Digitální podpis nájemce:\n%%SIGNATURE_IMAGE%%`
+        : `Smlouva bude digitálně podepsána při převzetí vozidla.`;
+
+    const contractVehicle = vehicle;
+    const customerForContract = customer;
+    
+    return `
+SMLOUVA O NÁJMU DOPRAVNÍHO PROSTŘEDKU
+=========================================
+
+Článek I. - Smluvní strany
+-----------------------------------------
+Pronajímatel:
+Milan Gula
+Ghegova 117, Brno Nové Sady, 60200
+Web: pujcimedodavky.cz
+IČO: 07031653
+(dále jen "pronajímatel")
+
+Nájemce:
+Jméno: ${customerForContract.firstName} ${customerForContract.lastName}
+Adresa: ${customerForContract.address}
+${customerForContract.ico ? `IČO: ${customerForContract.ico}` : ''}
+Email: ${customerForContract.email}
+Telefon: ${customerForContract.phone}
+Číslo ŘP: ${customerForContract.driverLicenseNumber}
+(dále jen "nájemce")
+
+Článek II. - Předmět a účel nájmu
+-----------------------------------------
+1. Pronajímatel tímto přenechává nájemci do dočasného užívání (nájmu) následující motorové vozidlo (dále jen "předmět nájmu" nebo "vozidlo"):
+   Vozidlo: ${contractVehicle.name} (${contractVehicle.make} ${contractVehicle.model})
+   SPZ: ${contractVehicle.licensePlate}
+   Rok výroby: ${contractVehicle.year}
+2. Nájemce se zavazuje užívat vozidlo k obvyklému účelu a v souladu s platnými právními předpisy.
+
+Článek III. - Doba nájmu a cena
+-----------------------------------------
+1. Doba nájmu je sjednána od: ${startDate.toLocaleString('cs-CZ')} do: ${endDate.toLocaleString('cs-CZ')}.
+2. Celková cena nájmu činí: ${totalPrice.toLocaleString('cs-CZ')} Kč. Cena je splatná při převzetí vozidla, není-li dohodnuto jinak.
+3. Nájemce bere na vědomí, že denní limit pro nájezd je 300 km. Za každý kilometr nad tento limit (vypočtený jako 300 km * počet dní pronájmu) bude účtován poplatek 3 Kč/km.
+   Počáteční stav kilometrů: ${(contractVehicle.currentMileage ?? 0).toLocaleString('cs-CZ')} km.
+
+Článek IV. - Vratná kauce (jistota)
+-----------------------------------------
+1. Nájemce skládá při podpisu této smlouvy a předání vozidla vratnou kauci ve výši 5.000 Kč (slovy: pět tisíc korun českých) v hotovosti nebo na bankovní účet pronajímatele. Tato kauce je plně vratná za podmínek uvedených níže.
+2. Tato kauce slouží k zajištění případných pohledávek pronajímatele vůči nájemci (např. na úhradu škody, smluvních pokut, nákladů na dotankování paliva atd.).
+3. Kauce bude nájemci vrácena v plné výši po řádném vrácení vozidla, a to bezodkladně, pokud nebudou shledány žádné vady či škody. V opačném případě je pronajímatel oprávněn kauci (nebo její část) použít na úhradu svých pohledávek.
+
+Článek V. - Práva a povinnosti stran
+-----------------------------------------
+1. Nájemce svým podpisem potvrzuje, že vozidlo převzal v řádném technickém stavu, bez zjevných závad, s kompletní povinnou výbavou a s plnou nádrží pohonných hmot.
+2. Nájemce je povinen užívat vozidlo s péčí řádného hospodáře, chránit ho před poškozením, ztrátou či zničením a dodržovat pokyny výrobce pro jeho provoz.
+3. V celém vozidle je PŘÍSNĚ ZAKÁZÁNO KOUŘIT. V případě porušení tohoto zákazu je nájemce povinen uhradit smluvní pokutu ve výši 500 Kč.
+4. Nájemce je povinen vrátit vozidlo s plnou nádrží pohonných hmot. V případě vrácení vozidla s neúplnou nádrží je nájemce povinen uhradit náklady na dotankování a smluvní pokutu ve výši 500 Kč.
+5. Nájemce není oprávněn provádět na vozidle jakékoliv úpravy, přenechat ho do podnájmu třetí osobě, ani ho použít k účasti na závodech, k trestné činnosti či k přepravě nebezpečných nákladů.
+
+Článek VI. - Odpovědnost za škodu a spoluúčast
+-----------------------------------------
+1. V případě poškození předmětu nájmu zaviněného nájemcem, nebo v případě odcizení, se sjednává spoluúčast nájemce na vzniklé škodě.
+2. Výše spoluúčasti činí 5.000 Kč při poškození pronajatého vozidla.
+3. V případě dopravní nehody, při které dojde k poškození jiných vozidel nebo majetku třetích stran, činí spoluúčast 10.000 Kč.
+4. Nájemce je povinen každou dopravní nehodu, poškození vozidla nebo jeho odcizení neprodleně ohlásit pronajimateli a Policii ČR.
+
+Článek VII. - Závěrečná ustanovení
+-----------------------------------------
+1. Tato smlouva nabývá platnosti a účinnosti dnem jejího podpisu oběma smluvními stranami.
+2. Smluvní strany prohlašují, že si smlouvu přečetly, s jejím obsahem souhlasí a na důkaz toho připojují své podpisy.
+3. Tato smlouva je vyhotovena elektronicky. Nájemce svým digitálním podpisem stvrzuje, že se seznámil s obsahem smlouvy, souhlasí s ním a vozidlo v uvedeném stavu přebírá.
+
+${signatureSection}
+    `.trim();
+};
+
 const expandData = (data: Omit<AppData, 'handoverProtocols' | 'settings' | 'invoices'> & { handoverProtocols: HandoverProtocol[], settings: CompanySettings | null, invoices: Invoice[] }): AppData => {
     const vehiclesById = new Map(data.vehicles.map(v => [v.id, v]));
     const customersById = new Map(data.customers.map(c => [c.id, c]));
@@ -254,7 +357,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             
             await api.updateReservation(reservationId, { status: 'scheduled' });
 
-            const contractText = `Smlouva pro ${reservation.customer.firstName} ${reservation.customer.lastName} a vozidlo ${reservation.vehicle.name}. \n\nSmlouva bude digitálně podepsána při převzetí vozidla.`;
+            const totalPrice = calculateTotalPrice(reservation.vehicle, new Date(reservation.startDate), new Date(reservation.endDate));
+
+            const contractText = generateContractText({
+                customer: reservation.customer,
+                vehicle: reservation.vehicle,
+                startDate: new Date(reservation.startDate),
+                endDate: new Date(reservation.endDate),
+                totalPrice: totalPrice,
+            }, 'text_placeholder');
+
             const contract = await api.addContract({
                 reservationId: reservation.id,
                 customerId: reservation.customerId,
@@ -373,6 +485,7 @@ ${signatureImgTag}
             const signatureImgTag = `<img src="${signatureUrl}" alt="signature" style="width: 250px; height: auto;" />`;
             const finalContractText = contractData.contractText.replace('%%SIGNATURE_IMAGE%%', signatureImgTag);
             
+            // This action is only for manual reservations, so we don't need to check for existing contracts.
             const newContract = await api.addContract({ ...contractData, contractText: finalContractText });
             await refreshData();
             return newContract;
