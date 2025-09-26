@@ -196,7 +196,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const fetchRes = await fetch(dataUrl);
         const blob = await fetchRes.blob();
         const signatureFile = new File([blob], `signature_${type}_${reservationId}.png`, { type: 'image/png' });
-        return await api.uploadFile('signatures', `${Date.now()}_${signatureFile.name}`, signatureFile);
+        // FIX: Place the file inside a 'public' folder to comply with common RLS policies.
+        const filePath = `public/${Date.now()}_${signatureFile.name}`;
+        return await api.uploadFile('signatures', filePath, signatureFile);
     };
 
     const actions = useMemo((): DataContextActions => ({
