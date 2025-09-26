@@ -53,14 +53,17 @@ const ApprovalModal: React.FC<ApprovalModalProps> = ({ isOpen, onClose, reservat
     
     const handleCloseConfirmation = () => {
         setConfirmationInfo(null);
+        // FIX: Refresh data only AFTER the confirmation modal is closed.
+        // This prevents the main approval modal from closing prematurely.
+        actions.refreshData();
     };
 
     // If reservations list becomes empty, close the modal automatically
     React.useEffect(() => {
-        if (isOpen && reservations.length === 0) {
+        if (isOpen && reservations.length === 0 && !confirmationInfo) {
             onClose();
         }
-    }, [reservations, isOpen, onClose]);
+    }, [reservations, isOpen, onClose, confirmationInfo]);
 
 
     if (!isOpen) return null;
