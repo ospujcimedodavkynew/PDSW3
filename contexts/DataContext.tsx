@@ -196,8 +196,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const fetchRes = await fetch(dataUrl);
         const blob = await fetchRes.blob();
         const signatureFile = new File([blob], `signature_${type}_${reservationId}.png`, { type: 'image/png' });
-        // FIX: Place the file inside a 'public' folder to comply with common RLS policies.
-        const filePath = `public/${Date.now()}_${signatureFile.name}`;
+        // The path should NOT include 'public/'. The centralized `uploadFile` function handles this.
+        const filePath = `${Date.now()}_${signatureFile.name}`;
         return await api.uploadFile('signatures', filePath, signatureFile);
     };
 
