@@ -225,7 +225,12 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
 
     return (
         <div className="space-y-6">
-            <ApprovalModal isOpen={isApprovalModalOpen} onClose={() => setIsApprovalModalOpen(false)} reservations={pendingApprovalReservations} />
+            <ApprovalModal 
+                isOpen={isApprovalModalOpen} 
+                onClose={() => setIsApprovalModalOpen(false)} 
+                reservations={pendingApprovalReservations}
+                onNavigateToPage={setCurrentPage}
+            />
             <ReservationDetailModal isOpen={isDetailModalOpen} onClose={handleCloseModal} reservation={selectedReservation} />
             <SelfServiceModal isOpen={isSelfServiceModalOpen} onClose={() => setIsSelfServiceModalOpen(false)} availableVehicles={vehicles.filter(v => v.status === 'available')} onLinkGenerated={onSelfServiceLinkGenerated} />
 

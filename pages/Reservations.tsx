@@ -28,7 +28,6 @@ const loadDraft = (): ReservationFormData => {
     try {
         const draft = sessionStorage.getItem(DRAFT_KEY);
         if (draft) {
-            // Ensure draft has all keys, especially new ones like 'ico'
             const parsedDraft = JSON.parse(draft);
             return { ...initialFormData, ...parsedDraft, newCustomerData: { ...initialFormData.newCustomerData, ...parsedDraft.newCustomerData }};
         }
@@ -118,15 +117,38 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
 
 
 const Reservations: React.FC = () => {
-    const { data, loading, actions } = useData();
+    // FIX: The `setReservationToEdit` function is part of the `actions` object and was destructured incorrectly.
+    const { data, loading, actions, reservationToEdit } = useData();
     const { vehicles, customers, reservations } = data;
     
     const [formData, setFormData] = useState<ReservationFormData>(loadDraft);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+
     const { selectedCustomerId, isNewCustomer, newCustomerData, selectedVehicleId, startDate, endDate } = formData;
     
     useEffect(() => {
-        sessionStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
-    }, [formData]);
+        if (reservationToEdit) {
+            const formatForInput = (date: Date | string) => new Date(date).toISOString().slice(0, 16);
+            setFormData({
+                selectedCustomerId: reservationToEdit.customerId,
+                isNewCustomer: false,
+                newCustomerData: initialFormData.newCustomerData,
+                selectedVehicleId: reservationToEdit.vehicleId,
+                startDate: formatForInput(reservationToEdit.startDate),
+                endDate: formatForInput(reservationToEdit.endDate),
+            });
+            setIsEditing(true);
+            setEditingId(reservationToEdit.id);
+            actions.setReservationToEdit(null); // Consume the edit request
+        }
+    }, [reservationToEdit, actions]);
+    
+    useEffect(() => {
+        if (!isEditing) {
+            sessionStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
+        }
+    }, [formData, isEditing]);
     
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
@@ -156,6 +178,9 @@ const Reservations: React.FC = () => {
         
         const conflictingVehicleIds = new Set<string>();
         for (const r of reservations) {
+            // When editing, exclude the reservation being edited from conflict checks
+            if (isEditing && r.id === editingId) continue;
+
             if (r.status === 'scheduled' || r.status === 'active') {
                 const resStart = new Date(r.startDate);
                 const resEnd = new Date(r.endDate);
@@ -165,13 +190,18 @@ const Reservations: React.FC = () => {
             }
         }
         return vehicles.filter(v => v.status !== 'maintenance' && !conflictingVehicleIds.has(v.id));
-    }, [vehicles, reservations, startDate, endDate]);
+    }, [vehicles, reservations, startDate, endDate, isEditing, editingId]);
 
     useEffect(() => {
         if (selectedVehicleId && !availableVehicles.some(v => v.id === selectedVehicleId)) {
-            setFormData(prev => ({ ...prev, selectedVehicleId: '' }));
+             // If the currently selected vehicle becomes unavailable, deselect it,
+             // unless we are in edit mode and it's the original vehicle for the reservation.
+            const originalReservationVehicle = isEditing ? reservations.find(r => r.id === editingId)?.vehicleId : null;
+            if (selectedVehicleId !== originalReservationVehicle) {
+                 setFormData(prev => ({ ...prev, selectedVehicleId: '' }));
+            }
         }
-    }, [availableVehicles, selectedVehicleId]);
+    }, [availableVehicles, selectedVehicleId, isEditing, editingId, reservations]);
 
     const totalPrice = useMemo(() => {
         if (!selectedVehicle || !startDate || !endDate) return 0;
@@ -209,6 +239,8 @@ const Reservations: React.FC = () => {
         setFormData(initialFormData);
         setSignatureDataUrl('');
         setCustomerSearchTerm('');
+        setIsEditing(false);
+        setEditingId(null);
         sessionStorage.removeItem(DRAFT_KEY);
     }, []);
 
@@ -220,8 +252,10 @@ const Reservations: React.FC = () => {
         if (!selectedVehicleId) { alert("Vyberte prosím vozidlo."); return; }
         if (!startDate || !endDate) { alert("Vyberte prosím období pronájmu."); return; }
         if (new Date(endDate) <= new Date(startDate)) { alert("Datum konce musí být po datu začátku."); return; }
-        if (!signatureDataUrl) { alert("Zákazník se musí podepsat."); return; }
-        if (!availableVehicles.some(v => v.id === selectedVehicleId)) {
+        
+        const isVehicleAvailable = availableVehicles.some(v => v.id === selectedVehicleId);
+        const originalVehicle = isEditing ? reservations.find(r => r.id === editingId)?.vehicleId : null;
+        if (!isVehicleAvailable && selectedVehicleId !== originalVehicle) {
             alert("Vybrané vozidlo není v tomto termínu dostupné. Zvolte prosím jiné vozidlo nebo termín.");
             return;
         }
@@ -229,28 +263,41 @@ const Reservations: React.FC = () => {
         setIsProcessing(true);
         try {
             let finalCustomerId = selectedCustomerId;
-            let customerForContract: Customer | undefined;
-
             if (isNewCustomer) {
                 const newCustomer = await actions.addCustomer(newCustomerData);
                 finalCustomerId = newCustomer.id;
-                customerForContract = newCustomer;
-            } else {
-                 customerForContract = customers.find(c => c.id === finalCustomerId);
             }
 
-            if (!customerForContract) throw new Error("Nepodařilo se nalézt data zákazníka.");
-            
-            const newReservation = await actions.addReservation({
-                customerId: finalCustomerId,
-                vehicleId: selectedVehicleId,
-                startDate: new Date(startDate),
-                endDate: new Date(endDate),
-            });
-            const contractVehicle = vehicles.find(v => v.id === selectedVehicleId);
-            if (!contractVehicle) throw new Error("Vozidlo nebylo nalezeno.");
+            if (isEditing && editingId) {
+                await actions.updateReservation(editingId, {
+                    customerId: finalCustomerId,
+                    vehicleId: selectedVehicleId,
+                    startDate: new Date(startDate),
+                    endDate: new Date(endDate),
+                    status: 'scheduled', // Update status from 'pending-approval'
+                });
+                alert('Rezervace byla úspěšně upravena a schválena.');
+                resetForm();
 
-            const contractText = `
+            } else { // Creating a new reservation
+                if (!signatureDataUrl) { alert("Zákazník se musí podepsat."); setIsProcessing(false); return; }
+
+                const customerForContract = isNewCustomer 
+                    ? { id: finalCustomerId, ...newCustomerData } as Customer
+                    : customers.find(c => c.id === finalCustomerId);
+
+                if (!customerForContract) throw new Error("Nepodařilo se nalézt data zákazníka.");
+                
+                const newReservation = await actions.addReservation({
+                    customerId: finalCustomerId,
+                    vehicleId: selectedVehicleId,
+                    startDate: new Date(startDate),
+                    endDate: new Date(endDate),
+                });
+                const contractVehicle = vehicles.find(v => v.id === selectedVehicleId);
+                if (!contractVehicle) throw new Error("Vozidlo nebylo nalezeno.");
+
+                const contractText = `
 SMLOUVA O NÁJMU DOPRAVNÍHO PROSTŘEDKU
 =========================================
 
@@ -316,32 +363,24 @@ Telefon: ${customerForContract.phone}
 
 Digitální podpis nájemce:
 (viz přiložený obrazový soubor)
-            `.trim();
-            
-            await actions.addContract({
-                reservationId: newReservation.id,
-                customerId: finalCustomerId,
-                vehicleId: selectedVehicleId,
-                generatedAt: new Date(),
-                contractText,
-            });
+                `.trim();
+                
+                await actions.addContract({
+                    reservationId: newReservation.id,
+                    customerId: finalCustomerId,
+                    vehicleId: selectedVehicleId,
+                    generatedAt: new Date(),
+                    contractText,
+                });
 
-            // Set contract info for the confirmation modal
-            setGeneratedContractInfo({
-                contractText: contractText,
-                customerEmail: customerForContract.email,
-                vehicleName: contractVehicle.name,
-            });
-
-            // Open the confirmation modal
-            setIsConfirmationModalOpen(true);
-
-            // Reset the main form
-            resetForm();
+                setGeneratedContractInfo({ contractText, customerEmail: customerForContract.email, vehicleName: contractVehicle.name });
+                setIsConfirmationModalOpen(true);
+                resetForm();
+            }
 
         } catch (error) {
-            console.error("Failed to create reservation:", error);
-            alert(`Chyba při vytváření rezervace: ${error instanceof Error ? error.message : "Neznámá chyba"}`);
+            console.error("Failed to process reservation:", error);
+            alert(`Chyba při zpracování rezervace: ${error instanceof Error ? error.message : "Neznámá chyba"}`);
         } finally {
             setIsProcessing(false);
         }
@@ -379,7 +418,7 @@ Digitální podpis nájemce:
         />
 
         <form onSubmit={handleSubmit} className="space-y-8">
-            <h1 className="text-3xl font-bold text-gray-800">Nová rezervace</h1>
+            <h1 className="text-3xl font-bold text-gray-800">{isEditing ? 'Upravit rezervaci' : 'Nová rezervace'}</h1>
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-6 bg-white p-6 rounded-lg shadow-md">
@@ -480,34 +519,36 @@ Digitální podpis nájemce:
                         )}
                     </section>
 
-                    {/* Signature Section */}
-                    <section>
-                         <h2 className="text-xl font-semibold text-gray-700 flex items-center mb-4"><Signature className="mr-2"/>4. Podpis zákazníka</h2>
-                         {signatureDataUrl ? (
-                             <div className="border border-gray-300 rounded-lg p-4 flex items-center justify-between">
-                                 <div className="bg-gray-100 p-2 rounded">
-                                    <img src={signatureDataUrl} alt="Podpis zákazníka" className="h-16 w-auto" />
+                    {/* Signature Section - Hidden when editing */}
+                    {!isEditing && (
+                        <section>
+                             <h2 className="text-xl font-semibold text-gray-700 flex items-center mb-4"><Signature className="mr-2"/>4. Podpis zákazníka</h2>
+                             {signatureDataUrl ? (
+                                 <div className="border border-gray-300 rounded-lg p-4 flex items-center justify-between">
+                                     <div className="bg-gray-100 p-2 rounded">
+                                        <img src={signatureDataUrl} alt="Podpis zákazníka" className="h-16 w-auto" />
+                                     </div>
+                                     <p className="font-semibold text-green-600">Podpis uložen</p>
+                                     <button
+                                         type="button"
+                                         onClick={() => setIsSignatureModalOpen(true)}
+                                         className="flex items-center py-2 px-4 rounded-md font-semibold bg-gray-200 hover:bg-gray-300"
+                                     >
+                                        <Edit className="w-4 h-4 mr-2" /> Změnit podpis
+                                     </button>
                                  </div>
-                                 <p className="font-semibold text-green-600">Podpis uložen</p>
-                                 <button
-                                     type="button"
-                                     onClick={() => setIsSignatureModalOpen(true)}
-                                     className="flex items-center py-2 px-4 rounded-md font-semibold bg-gray-200 hover:bg-gray-300"
-                                 >
-                                    <Edit className="w-4 h-4 mr-2" /> Změnit podpis
-                                 </button>
-                             </div>
-                         ) : (
-                            <button
-                                type="button"
-                                onClick={() => setIsSignatureModalOpen(true)}
-                                className="w-full py-4 px-6 border-2 border-dashed border-gray-400 rounded-lg text-gray-600 hover:bg-gray-50 hover:border-primary flex items-center justify-center transition-colors"
-                            >
-                                <Signature className="mr-3 w-6 h-6"/>
-                                <span className="font-bold text-lg">Otevřít pro podpis zákazníka</span>
-                            </button>
-                         )}
-                    </section>
+                             ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => setIsSignatureModalOpen(true)}
+                                    className="w-full py-4 px-6 border-2 border-dashed border-gray-400 rounded-lg text-gray-600 hover:bg-gray-50 hover:border-primary flex items-center justify-center transition-colors"
+                                >
+                                    <Signature className="mr-3 w-6 h-6"/>
+                                    <span className="font-bold text-lg">Otevřít pro podpis zákazníka</span>
+                                </button>
+                             )}
+                        </section>
+                    )}
 
                 </div>
 
@@ -546,7 +587,7 @@ Digitální podpis nájemce:
                             </div>
                         </div>
                          <button type="submit" className="w-full mt-6 bg-secondary text-dark-text font-bold py-3 rounded-lg hover:bg-secondary-hover transition-colors text-lg" disabled={isProcessing}>
-                            {isProcessing ? 'Zpracovávám...' : 'Vytvořit rezervaci a smlouvu'}
+                            {isProcessing ? 'Zpracovávám...' : (isEditing ? 'Uložit změny' : 'Vytvořit rezervaci a smlouvu')}
                         </button>
                     </div>
                 </div>

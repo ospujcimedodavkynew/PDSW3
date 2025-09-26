@@ -510,7 +510,8 @@ export const submitCustomerDetails = async (token: string, customerData: Omit<Cu
     const fileName = `${Date.now()}_${driverLicenseFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
     const driverLicenseImageUrl = await uploadFile('licenses', fileName, driverLicenseFile);
     const newCustomer = await addCustomer({ ...customerData, driverLicenseImageUrl });
-    await updateReservation(foundReservation.id, { customerId: newCustomer.id, status: 'scheduled' });
+    // FIX: Transition to 'pending-approval' instead of 'scheduled' to ensure admin oversight.
+    await updateReservation(foundReservation.id, { customerId: newCustomer.id, status: 'pending-approval' });
 };
 
 export const createOnlineReservation = async (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>): Promise<Reservation> => {

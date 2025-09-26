@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, FileText, Gauge, ShieldAlert, Camera, PlusCircle, Trash2, Wind, Droplets, KeyRound, CheckSquare } from 'lucide-react';
+import { X, FileText, Gauge, ShieldAlert, Camera, PlusCircle, Trash2, Wind, Droplets, KeyRound, CheckSquare, Signature, Edit } from 'lucide-react';
 import { Reservation } from '../types';
 import { useData, ProtocolData } from '../contexts/DataContext';
+import SignatureModal from './SignatureModal';
+
 
 interface NewDamage {
     description: string;
@@ -24,6 +26,8 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
     
     // Departure state
     const [startMileage, setStartMileage] = useState<string>('');
+    const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+    const [signatureDataUrl, setSignatureDataUrl] = useState('');
     
     // Arrival (protocol) state
     const [endMileage, setEndMileage] = useState<string>('');
@@ -53,6 +57,7 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
             setDamageDescription('');
             setDamageLocation('');
             setDamageImageFile(null);
+            setSignatureDataUrl('');
         }
     }, [isOpen, reservation]);
 
@@ -91,6 +96,11 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
         );
     }
     
+    const handleSaveSignature = (dataUrl: string) => {
+        setSignatureDataUrl(dataUrl);
+        setIsSignatureModalOpen(false);
+    };
+
     const handleAddDamage = () => {
         if (!damageDescription || !damageLocation || !damageImageFile) {
             alert('Vyplňte prosím popis, umístění a vyberte fotografii poškození.');
@@ -119,7 +129,12 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                     setIsProcessing(false);
                     return;
                 }
-                await actions.activateReservation(reservation.id, Number(startMileage));
+                if (!signatureDataUrl) {
+                    alert('Při předání vozidla je vyžadován podpis zákazníka.');
+                    setIsProcessing(false);
+                    return;
+                }
+                await actions.activateReservation(reservation.id, Number(startMileage), signatureDataUrl);
 
             } else if (isArrival) {
                 if (!endMileage || Number(endMileage) <= (reservation.startMileage ?? 0)) { alert('Konečný stav tachometru musí být větší než počáteční.'); setIsProcessing(false); return; }
@@ -163,6 +178,7 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
     
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start z-50 py-10 overflow-y-auto">
+            <SignatureModal isOpen={isSignatureModalOpen} onClose={() => setIsSignatureModalOpen(false)} onSave={handleSaveSignature} />
             <div className="bg-white rounded-lg shadow-2xl p-8 w-full max-w-3xl">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-2xl font-bold">
@@ -193,9 +209,26 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                     </div>
                     
                     {isDeparture && ( // --- DEPARTURE VIEW ---
-                        <div>
-                            <label htmlFor="startMileage" className="font-semibold text-gray-500 flex items-center"><Gauge className="w-4 h-4 mr-2" />Počáteční stav tachometru</label>
-                            <input id="startMileage" type="number" value={startMileage} onChange={(e) => setStartMileage(e.target.value)} className="w-full mt-1 p-2 border rounded-md" placeholder="Zadejte stav km" required />
+                        <div className="space-y-6">
+                            <div>
+                                <label htmlFor="startMileage" className="font-semibold text-gray-500 flex items-center"><Gauge className="w-4 h-4 mr-2" />Počáteční stav tachometru</label>
+                                <input id="startMileage" type="number" value={startMileage} onChange={(e) => setStartMileage(e.target.value)} className="w-full mt-1 p-2 border rounded-md" placeholder="Zadejte stav km" required />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-500 flex items-center mb-2"><Signature className="w-4 h-4 mr-2" />Podpis zákazníka</h3>
+                                {signatureDataUrl ? (
+                                     <div className="border border-gray-300 rounded-lg p-4 flex items-center justify-between bg-green-50">
+                                         <p className="font-semibold text-green-700">Podpis uložen</p>
+                                         <div className="bg-white p-1 border rounded"><img src={signatureDataUrl} alt="Podpis" className="h-12 w-auto" /></div>
+                                         <button type="button" onClick={() => setIsSignatureModalOpen(true)} className="flex items-center py-2 px-3 rounded-md font-semibold bg-gray-200 hover:bg-gray-300 text-sm"><Edit className="w-4 h-4 mr-2" /> Změnit</button>
+                                     </div>
+                                ) : (
+                                    <button type="button" onClick={() => setIsSignatureModalOpen(true)} className="w-full py-4 px-6 border-2 border-dashed border-gray-400 rounded-lg text-gray-600 hover:bg-gray-50 hover:border-primary flex items-center justify-center transition-colors">
+                                        <Signature className="mr-3 w-6 h-6"/>
+                                        <span className="font-bold text-lg">Otevřít pro podpis</span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     )}
                     
@@ -276,7 +309,7 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                         {(isDeparture || isArrival) && (
                             <button
                                 onClick={handleAction}
-                                disabled={isProcessing || (isArrival && !customerAgreed)}
+                                disabled={isProcessing || (isArrival && !customerAgreed) || (isDeparture && !signatureDataUrl)}
                                 className={`py-2 px-6 rounded-lg text-white font-semibold transition-colors ${isDeparture ? 'bg-green-500 hover:bg-green-600' : 'bg-primary hover:bg-primary-hover'} disabled:bg-gray-400 disabled:cursor-not-allowed`}
                             >
                                 {isProcessing ? 'Zpracovávám...' : (isDeparture ? 'Potvrdit vydání' : 'Uložit protokol a dokončit')}

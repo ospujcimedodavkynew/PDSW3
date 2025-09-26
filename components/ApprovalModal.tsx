@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { Reservation } from '../types';
+import { Reservation, Page } from '../types';
 import { useData } from '../contexts/DataContext';
-import { X, Check, Trash2, Car, Calendar, User, Mail, Phone, Loader } from 'lucide-react';
+import { X, Check, Trash2, Car, Calendar, User, Mail, Phone, Loader, Edit } from 'lucide-react';
 
 interface ApprovalModalProps {
     isOpen: boolean;
     onClose: () => void;
     reservations: Reservation[];
+    onNavigateToPage: (page: Page) => void;
 }
 
-const ApprovalModal: React.FC<ApprovalModalProps> = ({ isOpen, onClose, reservations }) => {
+const ApprovalModal: React.FC<ApprovalModalProps> = ({ isOpen, onClose, reservations, onNavigateToPage }) => {
     const { actions } = useData();
     const [processingId, setProcessingId] = useState<string | null>(null);
 
@@ -37,6 +38,12 @@ const ApprovalModal: React.FC<ApprovalModalProps> = ({ isOpen, onClose, reservat
                 setProcessingId(null);
             }
         }
+    };
+    
+    const handleEdit = (res: Reservation) => {
+        actions.setReservationToEdit(res);
+        onNavigateToPage(Page.RESERVATIONS);
+        onClose();
     };
 
     // If reservations list becomes empty, close the modal automatically
@@ -94,6 +101,9 @@ const ApprovalModal: React.FC<ApprovalModalProps> = ({ isOpen, onClose, reservat
                                         <>
                                             <button onClick={() => handleApprove(res.id)} className="w-full justify-center text-sm flex items-center py-2 px-3 rounded-md font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors">
                                                 <Check className="w-4 h-4 mr-2" /> Schválit
+                                            </button>
+                                            <button onClick={() => handleEdit(res)} className="w-full justify-center text-sm flex items-center py-2 px-3 rounded-md font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors">
+                                                <Edit className="w-4 h-4 mr-2" /> Upravit
                                             </button>
                                             <button onClick={() => handleReject(res.id)} className="w-full justify-center text-sm flex items-center py-2 px-3 rounded-md font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors">
                                                 <Trash2 className="w-4 h-4 mr-2" /> Zamítnout
