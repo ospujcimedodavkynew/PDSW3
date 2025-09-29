@@ -206,7 +206,11 @@ const OnlineBooking: React.FC = () => {
                 <h1 className="text-3xl font-bold text-green-800">Děkujeme za vaši rezervaci!</h1>
                 <p className="mt-2 text-lg text-gray-700">Vaše rezervace byla úspěšně odeslána.</p>
                 <p className="mt-1 text-gray-600">Brzy se vám ozveme s potvrzením a dalšími instrukcemi.</p>
-                <a href="https://www.pujcimedodavky.cz" className="mt-8 bg-primary text-white font-bold py-3 px-6 rounded-lg hover:bg-primary-hover transition-colors">
+                <a 
+                   href="https://www.pujcimedodavky.cz" 
+                   target="_top" 
+                   className="mt-8 bg-primary text-white font-bold py-3 px-6 rounded-lg hover:bg-primary-hover transition-colors"
+                >
                     Zpět na hlavní stránku
                 </a>
                 <p className="mt-4 text-sm text-gray-500">Toto okno nyní můžete bezpečně zavřít.</p>
