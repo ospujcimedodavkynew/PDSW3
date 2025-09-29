@@ -49,6 +49,13 @@ const OnlineBooking: React.FC = () => {
     const [displayVehicles, setDisplayVehicles] = useState<DisplayVehicle[]>([]);
     const [calculating, setCalculating] = useState(false);
 
+    // Check for 'embedded' parameter to conditionally hide UI elements
+    const isEmbedded = useMemo(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('embedded') === 'true';
+    }, []);
+
+
     useEffect(() => {
         const fetchPublicData = async () => {
             setPageLoading(true);
@@ -233,10 +240,12 @@ const OnlineBooking: React.FC = () => {
     return (
         <div className="min-h-screen bg-gray-100 p-4 sm:p-6 lg:p-8 font-sans">
             <div className="max-w-6xl mx-auto">
-                <header className="text-center mb-8">
-                    <h1 className="text-4xl font-bold text-primary">Online rezervace</h1>
-                    <p className="text-gray-600 mt-2">Zarezervujte si dodávku snadno a rychle.</p>
-                </header>
+                {!isEmbedded && (
+                    <header className="text-center mb-8">
+                        <h1 className="text-4xl font-bold text-primary">Online rezervace</h1>
+                        <p className="text-gray-600 mt-2">Zarezervujte si dodávku snadno a rychle.</p>
+                    </header>
+                )}
 
                 <form onSubmit={handleSubmit}>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
