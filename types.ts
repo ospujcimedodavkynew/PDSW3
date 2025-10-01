@@ -163,3 +163,9 @@ export interface Invoice {
     customer?: Customer;
     contract?: Contract;
 }
+
+// Type for pre-filling the reservation form
+export interface ReservationDefaults {
+    vehicleId?: string;
+    startDate?: Date;
+}

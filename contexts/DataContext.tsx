@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import * as api from '../services/api';
-import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage, HandoverProtocol, CompanySettings, Invoice, Page } from '../types';
+import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage, HandoverProtocol, CompanySettings, Invoice, Page, ReservationDefaults } from '../types';
 import { Session, RealtimeChannel } from '@supabase/supabase-js';
 
 
@@ -38,7 +38,7 @@ interface DataContextActions {
     approveReservation: (reservationId: string) => Promise<{ contractId: string; customerEmail: string; vehicleName: string; } | null>;
     rejectReservation: (reservationId: string) => Promise<void>;
     activateReservation: (reservationId: string, startMileage: number, signatureDataUrl: string) => Promise<void>;
-    completeReservation: (reservationId: string, endMileage: number, protocolData: ProtocolData, signatureDataUrl: string) => Promise<void>;
+    completeReservation: (reservationId: string, endMileage: number, protocolData: ProtocolData, signatureDataUrl: string, refuelingCost?: number, forfeitDeposit?: boolean) => Promise<void>;
     addContract: (contractData: Omit<Contract, 'id'>, signatureDataUrl: string) => Promise<Contract>;
     updateContract: (contractId: string, updates: Partial<Contract>) => Promise<void>;
     addExpense: (expenseData: { description: string; amount: number; date: Date; }) => Promise<void>;
@@ -49,6 +49,7 @@ interface DataContextActions {
     updateSettings: (settingsData: Omit<CompanySettings, 'id'>) => Promise<void>;
     addInvoice: (invoiceData: Omit<Invoice, 'id'>) => Promise<Invoice>;
     setReservationToEdit: (reservation: Reservation | null) => void;
+    setReservationDefaults: (defaults: ReservationDefaults | null) => void;
 }
 
 interface DataContextState {
@@ -59,6 +60,7 @@ interface DataContextState {
     isVehicleFormModalOpen: boolean;
     vehicleBeingEdited: Partial<Vehicle> | null;
     reservationToEdit: Reservation | null;
+    reservationDefaults: ReservationDefaults | null;
 }
 
 const DataContext = createContext<DataContextState | undefined>(undefined);
@@ -189,6 +191,7 @@ const expandData = (data: Omit<AppData, 'handoverProtocols' | 'settings' | 'invo
     const contracts = data.contracts.map(c => ({
         ...c,
         customer: customersById.get(c.customerId),
+        // FIX: The variable 'r' was undefined in this context. It should be 'c' to reference the current contract object.
         vehicle: vehiclesById.get(c.vehicleId),
     }));
 
@@ -244,6 +247,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [isVehicleFormModalOpen, setIsVehicleFormModalOpen] = useState(false);
     const [vehicleBeingEdited, setVehicleBeingEdited] = useState<Partial<Vehicle> | null>(null);
     const [reservationToEdit, setReservationToEdit] = useState<Reservation | null>(null);
+    const [reservationDefaults, setReservationDefaults] = useState<ReservationDefaults | null>(null);
 
     const refreshData = useCallback(async () => {
         try {
@@ -416,7 +420,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             await refreshData();
         },
-        completeReservation: async (reservationId, endMileage, protocolData, signatureDataUrl) => {
+        completeReservation: async (reservationId, endMileage, protocolData, signatureDataUrl, refuelingCost, forfeitDeposit) => {
             const reservation = data.reservations.find(r => r.id === reservationId);
             if (!reservation || !reservation.vehicle) throw new Error("Reservation or vehicle not found");
             
@@ -478,6 +482,26 @@ ${signatureImgTag}
                 reservationId,
             });
 
+            if (refuelingCost && refuelingCost > 0) {
+                await api.addFinancialTransaction({
+                    type: 'expense',
+                    amount: refuelingCost,
+                    date: new Date(),
+                    description: `Náklady na dotankování - ${reservation.vehicle.name}`,
+                    reservationId,
+                });
+            }
+
+            if (forfeitDeposit) {
+                await api.addFinancialTransaction({
+                    type: 'income',
+                    amount: 5000, // Fixed deposit amount from contract
+                    date: new Date(),
+                    description: `Propadlá kauce (poškození) - ${reservation.vehicle.name}`,
+                    reservationId,
+                });
+            }
+
             await refreshData();
         },
         addContract: async (contractData, signatureDataUrl) => {
@@ -526,6 +550,9 @@ ${signatureImgTag}
         setReservationToEdit: (reservation) => {
             setReservationToEdit(reservation);
         },
+        setReservationDefaults: (defaults) => {
+            setReservationDefaults(defaults);
+        },
     }), [data.reservations, data.contracts, refreshData]);
 
     const value = useMemo(() => ({
@@ -536,7 +563,8 @@ ${signatureImgTag}
         isVehicleFormModalOpen,
         vehicleBeingEdited,
         reservationToEdit,
-    }), [data, loading, session, actions, isVehicleFormModalOpen, vehicleBeingEdited, reservationToEdit]);
+        reservationDefaults,
+    }), [data, loading, session, actions, isVehicleFormModalOpen, vehicleBeingEdited, reservationToEdit, reservationDefaults]);
 
     return (
         <DataContext.Provider value={value}>

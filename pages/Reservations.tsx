@@ -41,8 +41,7 @@ const loadDraft = (): ReservationFormData => {
 
 
 const Reservations: React.FC = () => {
-    // FIX: The `setReservationToEdit` function is part of the `actions` object and was destructured incorrectly.
-    const { data, loading, actions, reservationToEdit } = useData();
+    const { data, loading, actions, reservationToEdit, reservationDefaults } = useData();
     const { vehicles, customers, reservations } = data;
     
     const [formData, setFormData] = useState<ReservationFormData>(loadDraft);
@@ -51,9 +50,11 @@ const Reservations: React.FC = () => {
 
     const { selectedCustomerId, isNewCustomer, newCustomerData, selectedVehicleId, startDate, endDate } = formData;
     
+    // Function to format date object to "YYYY-MM-DDTHH:mm" string
+    const formatForInput = (date: Date | string) => new Date(date).toISOString().slice(0, 16);
+
     useEffect(() => {
         if (reservationToEdit) {
-            const formatForInput = (date: Date | string) => new Date(date).toISOString().slice(0, 16);
             setFormData({
                 selectedCustomerId: reservationToEdit.customerId,
                 isNewCustomer: false,
@@ -67,6 +68,18 @@ const Reservations: React.FC = () => {
             actions.setReservationToEdit(null); // Consume the edit request
         }
     }, [reservationToEdit, actions]);
+
+    useEffect(() => {
+        if (reservationDefaults) {
+            setFormData(prev => ({
+                ...prev,
+                selectedVehicleId: reservationDefaults.vehicleId || prev.selectedVehicleId,
+                startDate: reservationDefaults.startDate ? formatForInput(reservationDefaults.startDate) : prev.startDate,
+            }));
+            window.scrollTo(0, 0); // Scroll to top
+            actions.setReservationDefaults(null); // Consume the defaults
+        }
+    }, [reservationDefaults, actions]);
     
     useEffect(() => {
         if (!isEditing) {

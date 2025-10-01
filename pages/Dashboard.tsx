@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Reservation, Vehicle, Page, VehicleService } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { Car, Users, CalendarCheck, AlertTriangle, Link, ArrowRightLeft, Wrench, Phone, ArrowUpCircle, ArrowDownCircle, Bell, CalendarClock, Settings, ShieldCheck, Ticket, CreditCard } from 'lucide-react';
+import { Car, Users, CalendarCheck, AlertTriangle, Link, ArrowRightLeft, Wrench, Phone, ArrowUpCircle, ArrowDownCircle, Bell, CalendarClock, Settings, ShieldCheck, Ticket, CreditCard, Zap } from 'lucide-react';
 import ReservationDetailModal from '../components/ReservationDetailModal';
 import SelfServiceModal from '../components/SelfServiceModal';
 import ApprovalModal from '../components/ApprovalModal';
@@ -150,6 +150,58 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
         [reservations]
     );
 
+    const { availableToday, availableTomorrow } = useMemo(() => {
+        const today = new Date();
+        const todayStart = new Date(today.setHours(0, 0, 0, 0));
+        const todayEnd = new Date(today.setHours(23, 59, 59, 999));
+        
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStart = new Date(tomorrow.setHours(0, 0, 0, 0));
+        const tomorrowEnd = new Date(tomorrow.setHours(23, 59, 59, 999));
+
+        const activeAndScheduled = reservations.filter(r => r.status === 'active' || r.status === 'scheduled');
+        
+        const todayVehicles: { vehicle: Vehicle, note?: string }[] = [];
+        const tomorrowVehicles: { vehicle: Vehicle, note?: string }[] = [];
+
+        vehicles.forEach(v => {
+            if (v.status === 'maintenance') return;
+
+            // Check for Today
+            if (v.status === 'available') {
+                todayVehicles.push({ vehicle: v });
+            } else if (v.status === 'rented') {
+                const rental = activeAndScheduled.find(r => r.vehicleId === v.id && r.status === 'active');
+                if (rental && rental.endDate) {
+                    const endDate = new Date(rental.endDate);
+                    if (endDate >= todayStart && endDate <= todayEnd) {
+                        todayVehicles.push({ vehicle: v, note: `(od ${endDate.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })})` });
+                    }
+                }
+            }
+
+            // Check for Tomorrow
+            const tomorrowBooking = activeAndScheduled.some(r => {
+                const resStart = new Date(r.startDate);
+                const resEnd = new Date(r.endDate);
+                return r.vehicleId === v.id && resStart < tomorrowEnd && resEnd > tomorrowStart;
+            });
+            if (!tomorrowBooking) {
+                tomorrowVehicles.push({ vehicle: v });
+            }
+        });
+        return { availableToday: todayVehicles, availableTomorrow: tomorrowVehicles };
+
+    }, [vehicles, reservations]);
+
+    const handleQuickBook = (vehicleId: string, date: Date) => {
+        date.setHours(8, 0, 0, 0); // Default start time
+        actions.setReservationDefaults({ vehicleId, startDate: date });
+        setCurrentPage(Page.RESERVATIONS);
+    };
+
+
     const handleOpenDetailModal = (reservation: Reservation) => {
         setSelectedReservation(reservation);
         setIsDetailModalOpen(true);
@@ -251,26 +303,53 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
-                    <h2 className="text-xl font-bold text-gray-700 mb-4">Stav flotily</h2>
-                     <div className="grid grid-cols-2 gap-4 items-center">
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                     <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center"><Zap className="mr-2 text-green-500"/>Rychlá dostupnost</h2>
+                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <ResponsiveContainer width="100%" height={200}>
+                            <h3 className="font-semibold text-center mb-2">Volné dnes</h3>
+                            <div className="space-y-2">
+                                {availableToday.length > 0 ? availableToday.map(({vehicle, note}) => (
+                                    <button key={vehicle.id} onClick={() => handleQuickBook(vehicle.id, new Date())} className="w-full text-left p-2 bg-gray-100 rounded-md hover:bg-blue-100 hover:shadow transition-all">
+                                        <p className="font-semibold">{vehicle.name}</p>
+                                        <p className="text-xs text-gray-600">{vehicle.licensePlate} <span className="text-green-600 font-bold">{note}</span></p>
+                                    </button>
+                                )) : <p className="text-sm text-gray-500 text-center p-4">Žádná vozidla.</p>}
+                            </div>
+                        </div>
+                         <div>
+                            <h3 className="font-semibold text-center mb-2">Volné zítra</h3>
+                            <div className="space-y-2">
+                                {availableTomorrow.length > 0 ? availableTomorrow.map(({vehicle, note}) => (
+                                    <button key={vehicle.id} onClick={() => { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); handleQuickBook(vehicle.id, tomorrow); }} className="w-full text-left p-2 bg-gray-100 rounded-md hover:bg-blue-100 hover:shadow transition-all">
+                                        <p className="font-semibold">{vehicle.name}</p>
+                                        <p className="text-xs text-gray-600">{vehicle.licensePlate} <span className="text-green-600 font-bold">{note}</span></p>
+                                    </button>
+                                )) : <p className="text-sm text-gray-500 text-center p-4">Žádná vozidla.</p>}
+                            </div>
+                        </div>
+                     </div>
+                </div>
+                 <div className="bg-white p-6 rounded-lg shadow-md">
+                    <h2 className="text-xl font-bold text-gray-700 mb-4">Stav flotily</h2>
+                     <div className="flex items-center justify-center">
+                        <div>
+                            <ResponsiveContainer width={200} height={160}>
                                 <PieChart>
-                                    <Pie data={vehicleStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} fill="#8884d8">
+                                    <Pie data={vehicleStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} fill="#8884d8">
                                         {vehicleStatusData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[entry.name === 'K dispozici' ? 'available' : entry.name === 'Pronajato' ? 'rented' : 'maintenance']} />))}
                                     </Pie>
                                     <Tooltip /><Legend />
                                 </PieChart>
                             </ResponsiveContainer>
                         </div>
-                        <div className="text-center"><p className="text-gray-500 font-medium">Vytíženost flotily</p><p className="text-6xl font-bold text-primary">{fleetUtilization}%</p></div>
+                        <div className="text-center ml-4"><p className="text-gray-500 font-medium">Vytíženost</p><p className="text-5xl font-bold text-primary">{fleetUtilization}%</p></div>
                     </div>
                 </div>
                  <div className="bg-white p-6 rounded-lg shadow-md">
                     <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center"><AlertTriangle className="mr-2 text-red-500"/>Upozornění</h2>
                     {hasAlerts ? (
-                        <ul className="space-y-3">
+                        <ul className="space-y-3 max-h-40 overflow-y-auto">
                             {maintenanceVehicles.map(v => (
                                 <li key={v.id} className="text-gray-600 flex items-start">
                                     <Car className="w-4 h-4 mr-2 mt-1 text-red-500 flex-shrink-0"/>

@@ -33,6 +33,8 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
     const [endMileage, setEndMileage] = useState<string>('');
     const [notes, setNotes] = useState('');
     const [fuelLevel, setFuelLevel] = useState('');
+    const [refuelingCost, setRefuelingCost] = useState<string>('');
+    const [forfeitDeposit, setForfeitDeposit] = useState(false);
     const [cleanliness, setCleanliness] = useState('');
     const [keysAndDocsOk, setKeysAndDocsOk] = useState(true);
     const [isReturnSignatureModalOpen, setIsReturnSignatureModalOpen] = useState(false);
@@ -59,6 +61,8 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
             setDamageImageFile(null);
             setDepartureSignatureDataUrl('');
             setReturnSignatureDataUrl('');
+            setRefuelingCost('');
+            setForfeitDeposit(false);
         }
     }, [isOpen, reservation]);
 
@@ -155,7 +159,8 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
 
                 // 2. Prepare protocol data and complete reservation
                 const protocolData: ProtocolData = { notes, fuelLevel, cleanliness, keysAndDocsOk, customerAgreed: true }; // Agreement is now signature
-                await actions.completeReservation(reservation.id, Number(endMileage), protocolData, returnSignatureDataUrl);
+                const cost = refuelingCost ? parseFloat(refuelingCost) : 0;
+                await actions.completeReservation(reservation.id, Number(endMileage), protocolData, returnSignatureDataUrl, cost, forfeitDeposit);
             }
             onClose();
         } catch (error) {
@@ -264,6 +269,19 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                                     <div className="flex flex-wrap gap-2">
                                         {['Plná', '3/4', '1/2', '1/4', 'Prázdná'].map(level => <button key={level} type="button" onClick={() => setFuelLevel(level)} className={`px-3 py-1.5 text-sm font-semibold rounded-full border-2 ${fuelLevel === level ? 'bg-primary text-white border-primary' : 'bg-white hover:bg-gray-100 border-gray-300'}`}>{level}</button>)}
                                     </div>
+                                    {fuelLevel && fuelLevel !== 'Plná' && (
+                                        <div className="mt-4">
+                                            <label htmlFor="refuelingCost" className="block text-sm font-medium text-yellow-800">Náklady na dotankování (Kč)</label>
+                                            <input
+                                                id="refuelingCost"
+                                                type="number"
+                                                value={refuelingCost}
+                                                onChange={(e) => setRefuelingCost(e.target.value)}
+                                                className="w-full mt-1 p-2 border rounded-md border-yellow-300 focus:ring-yellow-500 focus:border-yellow-500"
+                                                placeholder="Zadejte částku"
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                                  <div>
                                     <h3 className="font-semibold text-gray-500 mb-2">Čistota vozidla</h3>
@@ -279,7 +297,23 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
 
                             {/* Notes, Damage, Agreement */}
                             <div><label htmlFor="notes" className="font-semibold text-gray-500">Poznámky</label><textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full mt-1 p-2 border rounded-md h-20" placeholder="Např. specifické detaily ke stavu vozidla..."/></div>
-                            <div className="bg-red-50 border border-red-200 p-4 rounded-lg space-y-3"><h3 className="font-semibold text-red-800 flex items-center"><ShieldAlert className="w-5 h-5 mr-2" /> Záznam o novém poškození</h3>{/* Damage Form & List */}</div>
+                            <div className="bg-red-50 border border-red-200 p-4 rounded-lg space-y-3">
+                                <h3 className="font-semibold text-red-800 flex items-center"><ShieldAlert className="w-5 h-5 mr-2" /> Záznam o novém poškození</h3>
+                                {/* Damage Form & List will go here if we expand */}
+                                {newDamages.length > 0 && (
+                                    <div className="mt-4 pt-4 border-t border-red-200">
+                                        <label className="flex items-center">
+                                            <input
+                                                type="checkbox"
+                                                checked={forfeitDeposit}
+                                                onChange={(e) => setForfeitDeposit(e.target.checked)}
+                                                className="h-5 w-5 rounded text-primary focus:ring-primary border-gray-300"
+                                            />
+                                            <span className="ml-3 font-medium text-gray-700">Započítat kauci (5.000 Kč) na úhradu škody</span>
+                                        </label>
+                                    </div>
+                                )}
+                            </div>
                             
                             <div className="border-t pt-4">
                                 <h3 className="font-semibold text-gray-500 mb-2 flex items-center"><Signature className="w-5 h-5 mr-2" /> Podpis zákazníka a souhlas</h3>
