@@ -305,27 +305,27 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-lg shadow-md">
                      <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center"><Zap className="mr-2 text-green-500"/>Rychlá dostupnost</h2>
-                     <div className="grid grid-cols-2 gap-4">
+                     <div className="space-y-4">
                         <div>
-                            <h3 className="font-semibold text-center mb-2">Volné dnes</h3>
-                            <div className="space-y-2">
+                            <h3 className="font-semibold mb-2">Volné dnes</h3>
+                            <div className="flex flex-wrap gap-2">
                                 {availableToday.length > 0 ? availableToday.map(({vehicle, note}) => (
-                                    <button key={vehicle.id} onClick={() => handleQuickBook(vehicle.id, new Date())} className="w-full text-left p-2 bg-gray-100 rounded-md hover:bg-blue-100 hover:shadow transition-all">
+                                    <button key={vehicle.id} onClick={() => handleQuickBook(vehicle.id, new Date())} className="p-2 bg-gray-100 rounded-md hover:bg-blue-100 hover:shadow transition-all text-sm">
                                         <p className="font-semibold">{vehicle.name}</p>
                                         <p className="text-xs text-gray-600">{vehicle.licensePlate} <span className="text-green-600 font-bold">{note}</span></p>
                                     </button>
-                                )) : <p className="text-sm text-gray-500 text-center p-4">Žádná vozidla.</p>}
+                                )) : <p className="text-sm text-gray-500 p-2">Žádná vozidla.</p>}
                             </div>
                         </div>
                          <div>
-                            <h3 className="font-semibold text-center mb-2">Volné zítra</h3>
-                            <div className="space-y-2">
+                            <h3 className="font-semibold mb-2">Volné zítra</h3>
+                            <div className="flex flex-wrap gap-2">
                                 {availableTomorrow.length > 0 ? availableTomorrow.map(({vehicle, note}) => (
-                                    <button key={vehicle.id} onClick={() => { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); handleQuickBook(vehicle.id, tomorrow); }} className="w-full text-left p-2 bg-gray-100 rounded-md hover:bg-blue-100 hover:shadow transition-all">
+                                    <button key={vehicle.id} onClick={() => { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); handleQuickBook(vehicle.id, tomorrow); }} className="p-2 bg-gray-100 rounded-md hover:bg-blue-100 hover:shadow transition-all text-sm">
                                         <p className="font-semibold">{vehicle.name}</p>
                                         <p className="text-xs text-gray-600">{vehicle.licensePlate} <span className="text-green-600 font-bold">{note}</span></p>
                                     </button>
-                                )) : <p className="text-sm text-gray-500 text-center p-4">Žádná vozidla.</p>}
+                                )) : <p className="text-sm text-gray-500 p-2">Žádná vozidla.</p>}
                             </div>
                         </div>
                      </div>
