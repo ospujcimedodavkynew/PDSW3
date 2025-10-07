@@ -1,6 +1,10 @@
 import React from 'react';
+import { useData } from '../contexts/DataContext';
 
 const LogoWithQR: React.FC = () => {
+    const { data } = useData();
+    const phoneNumber = data.settings?.contactPhone || '777 123 456'; // Fallback phone number
+    
     // The link for the QR code
     const onlineBookingLink = `${window.location.origin}${window.location.pathname}?online-rezervace=true`;
 
@@ -39,16 +43,10 @@ const LogoWithQR: React.FC = () => {
                 <g transform="translate(40, 130)">
                     {/* Left side: QR Code */}
                     <g>
-                        {/* QR Code Placeholder - simple square pattern */}
-                        <rect x="0" y="0" width="180" height="180" fill="#111827" />
-                        <rect x="10" y="10" width="50" height="50" fill="white"/>
-                        <rect x="20" y="20" width="30" height="30" fill="#111827"/>
-                        <rect x="120" y="10" width="50" height="50" fill="white"/>
-                        <rect x="130" y="20" width="30" height="30" fill="#111827"/>
-                        <rect x="10" y="120" width="50" height="50" fill="white"/>
-                        <rect x="20" y="130" width="30" height="30" fill="#111827"/>
-                        <path d="M 70 70 H 110 V 110 H 70 Z M 120 70 H 140 V 90 H 120 Z M 70 120 H 90 V 140 H 70 Z M 150 150 H 170 V 170 H 150 Z" fill="white"/>
-
+                        {/* Functional QR Code - SVG Path */}
+                        <g transform="translate(0, 0) scale(4.28)">
+                            <path fill="#111827" d="M0 0h7v7H0z M1 1h5v5H1z m2 2h1v1H3z M8 0h7v7H8z M9 1h5v5H9z m2 2h1v1h-1z M15 0h7v7h-7z M16 1h5v5h-16z M18 3h1v1h-1z M0 8h7v7H0z M1 9h5v5H1z M3 11h1v1H3z M0 15h7v7H0z M1 16h5v5H1z M3 18h1v1H3z M8 8h1v1H8z m2 0h1v1h-1z m2 0h1v1h-1z m2 0h1v1h-1z m2 0h1v1h-1z m2 0h1v1h-1z m1-1v1h1V8h-1z M8 10h1v1H8z m6 0h1v1h-1z m2 0h1v1h-1z M8 12h1v1H8z m2 0h1v1h-1z m4 0h1v1h-1z m2 0h1v1h-1z m2 0h1v1h-1z M8 14h1v1H8z m2 0h1v1h-1z m2 0h1v1h-1z m2 0h1v1h-1z m4 0h1v1h-1z m-11 1v1h1v-1H8z m-1 8h1v1H7z m1-1h1v1H8z m2 0h1v1h-1z m2 0h1v1h-1z m-2 2h1v1h-1z m2 0h1v1h-1z m2 0h1v1h-1z m2 0h1v1h-1z m2 0h1v1h-1z m-11-5h1v1H8z m-1 6h1v1H7z m1-1h1v1H8z m1-1h1v1H9z m1-1h1v1h-1z m1-1h1v1h-1z m2 0h1v1h-1z m2 0h1v1h-1z m2 0h1v1h-1z m-9-3h1v1H8z m1-1h1v1H9z m1-1h1v1h-1z m1-1h1v1h-1z m1-1h1v1h-1z m1 0h1v1h-1z m1 0h1v1h-1z m1 0h1v1h-1z m1 0h1v1h-1z m1 0h1v1h-1z"/>
+                        </g>
                         <text x="90" y="205" fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" fontSize="18" fontWeight="bold" fill="#111827" textAnchor="middle">
                             Naskenujte & Rezervujte
                         </text>
@@ -64,7 +62,7 @@ const LogoWithQR: React.FC = () => {
                         {/* Phone Icon */}
                         <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" fill="#1E40AF" transform="translate(0, 50) scale(1.5)" />
                         <text x="40" y="80" fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" fontSize="42" fontWeight="bold" fill="#1E40AF">
-                            777 123 456
+                            {phoneNumber}
                         </text>
                     </g>
                 </g>
