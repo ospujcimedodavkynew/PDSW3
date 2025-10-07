@@ -2,6 +2,7 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import { useData } from '../contexts/DataContext';
 import { CompanySettings } from '../types';
 import { Save, Loader } from 'lucide-react';
+import Logo from '../components/Logo'; // Import the new component
 
 const Settings: React.FC = () => {
     const { data, actions, loading } = useData();
@@ -46,6 +47,19 @@ const Settings: React.FC = () => {
     return (
         <div className="max-w-4xl mx-auto">
             <h1 className="text-3xl font-bold text-gray-800 mb-6">Nastavení</h1>
+
+            <div className="bg-white p-8 rounded-lg shadow-md mb-6">
+                <h2 className="text-xl font-bold text-gray-700">Logo a firemní identita</h2>
+                <p className="text-sm text-gray-500 mb-4">
+                    Toto je vaše oficiální logo, ideální pro magnetické polepy, vizitky a další materiály.
+                </p>
+                <div className="border p-4 rounded-md bg-gray-50">
+                    <Logo />
+                </div>
+                <p className="text-xs text-gray-400 mt-2 text-center">
+                    Pro uložení klikněte na logo pravým tlačítkem a zvolte "Uložit obrázek jako...". Uloží se jako SVG soubor.
+                </p>
+            </div>
 
             <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow-md space-y-6">
                 <div>
