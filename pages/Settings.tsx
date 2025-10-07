@@ -2,7 +2,6 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import { useData } from '../contexts/DataContext';
 import type { CompanySettings } from '../types';
 import { Save, Loader } from 'lucide-react';
-import LogoWithQR from '../components/LogoWithQR';
 
 // Helper component for input fields to keep the main component cleaner
 const InputField: React.FC<{
@@ -86,14 +85,6 @@ const Settings: React.FC = () => {
     return (
         <div className="space-y-6">
             <h1 className="text-3xl font-bold text-gray-800">Nastavení</h1>
-
-            <section className="bg-white p-6 rounded-lg shadow-md">
-                <h2 className="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Logo a firemní identita</h2>
-                <p className="text-sm text-gray-600 mb-4">
-                    Toto je finální návrh pro vaše magnetické polepy. Klikněte na něj pravým tlačítkem a zvolte "Uložit obrázek jako..." pro stažení ve formátu SVG, který je ideální pro tisk.
-                </p>
-                <LogoWithQR />
-            </section>
             
             <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow-md max-w-3xl mx-auto space-y-6">
                 <section>
