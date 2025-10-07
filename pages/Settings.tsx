@@ -1,27 +1,69 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import { useData } from '../contexts/DataContext';
-import { CompanySettings } from '../types';
+import type { CompanySettings } from '../types';
 import { Save, Loader } from 'lucide-react';
-import Logo from '../components/Logo'; // Import the new component
+
+// Helper component for input fields to keep the main component cleaner
+const InputField: React.FC<{
+    label: string;
+    name: string;
+    value: string;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    required?: boolean;
+    type?: string;
+}> = ({ label, name, value, onChange, required = false, type = 'text' }) => (
+    <div>
+        <label htmlFor={name} className="block text-sm font-medium text-gray-700">{label}</label>
+        <input
+            type={type}
+            id={name}
+            name={name}
+            value={value}
+            onChange={onChange}
+            required={required}
+            className="mt-1 w-full p-2 border rounded-md shadow-sm focus:ring-primary focus:border-primary"
+        />
+    </div>
+);
+
 
 const Settings: React.FC = () => {
-    const { data, actions, loading } = useData();
-    const [settings, setSettings] = useState<Omit<CompanySettings, 'id'>>({
-        companyName: '', address: '', ico: '', dic: '', bankAccount: '', 
-        iban: '', swift: '', contactEmail: '', contactPhone: ''
+    const { data, actions } = useData();
+    const { settings } = data;
+
+    const [formData, setFormData] = useState<Omit<CompanySettings, 'id'>>({
+        companyName: '',
+        address: '',
+        ico: '',
+        dic: '',
+        bankAccount: '',
+        iban: '',
+        swift: '',
+        contactEmail: '',
+        contactPhone: '',
     });
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
 
     useEffect(() => {
-        if (data.settings) {
-            setSettings(data.settings);
+        if (settings) {
+            setFormData({
+                companyName: settings.companyName || '',
+                address: settings.address || '',
+                ico: settings.ico || '',
+                dic: settings.dic || '',
+                bankAccount: settings.bankAccount || '',
+                iban: settings.iban || '',
+                swift: settings.swift || '',
+                contactEmail: settings.contactEmail || '',
+                contactPhone: settings.contactPhone || '',
+            });
         }
-    }, [data.settings]);
+    }, [settings]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-        setSettings(prev => ({ ...prev, [name]: value }));
+        setFormData(prev => ({ ...prev, [name]: value }));
     };
 
     const handleSubmit = async (e: FormEvent) => {
@@ -29,105 +71,60 @@ const Settings: React.FC = () => {
         setIsSaving(true);
         setSaveSuccess(false);
         try {
-            await actions.updateSettings(settings);
+            await actions.updateSettings(formData);
             setSaveSuccess(true);
-            setTimeout(() => setSaveSuccess(false), 3000);
+            setTimeout(() => setSaveSuccess(false), 3000); // Hide message after 3 seconds
         } catch (error) {
-            console.error("Failed to save settings:", error);
+            console.error("Failed to update settings:", error);
             alert("Uložení nastavení se nezdařilo.");
         } finally {
             setIsSaving(false);
         }
     };
 
-    if (loading && !data.settings) {
-        return <div className="flex justify-center items-center h-full"><Loader className="w-8 h-8 animate-spin" /> Načítání nastavení...</div>;
-    }
-
     return (
-        <div className="max-w-4xl mx-auto">
-            <h1 className="text-3xl font-bold text-gray-800 mb-6">Nastavení</h1>
-
-            <div className="bg-white p-8 rounded-lg shadow-md mb-6">
-                <h2 className="text-xl font-bold text-gray-700">Logo a firemní identita</h2>
-                <p className="text-sm text-gray-500 mb-4">
-                    Toto je vaše oficiální logo, ideální pro magnetické polepy, vizitky a další materiály.
-                </p>
-                <div className="border p-4 rounded-md bg-gray-50">
-                    <Logo />
-                </div>
-                <p className="text-xs text-gray-400 mt-2 text-center">
-                    Pro uložení klikněte na logo pravým tlačítkem a zvolte "Uložit obrázek jako...". Uloží se jako SVG soubor.
-                </p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow-md space-y-6">
-                <div>
-                    <h2 className="text-xl font-bold text-gray-700">Fakturační údaje společnosti</h2>
-                    <p className="text-sm text-gray-500">Tyto údaje se budou automaticky zobrazovat na všech vystavených fakturách.</p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">Název společnosti / Jméno</label>
-                        <input type="text" name="companyName" id="companyName" value={settings.companyName} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary" required />
+        <div className="space-y-6">
+            <h1 className="text-3xl font-bold text-gray-800">Nastavení</h1>
+            
+            <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow-md max-w-3xl mx-auto space-y-6">
+                <section>
+                    <h2 className="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Firemní a fakturační údaje</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <InputField label="Název společnosti" name="companyName" value={formData.companyName} onChange={handleChange} required />
+                        <InputField label="IČO" name="ico" value={formData.ico} onChange={handleChange} required />
+                        <InputField label="DIČ" name="dic" value={formData.dic} onChange={handleChange} required />
+                        <div className="md:col-span-2">
+                           <InputField label="Adresa sídla" name="address" value={formData.address} onChange={handleChange} required />
+                        </div>
                     </div>
-                    <div>
-                        <label htmlFor="address" className="block text-sm font-medium text-gray-700">Adresa sídla</label>
-                        <input type="text" name="address" id="address" value={settings.address} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary" required />
-                    </div>
-                    <div>
-                        <label htmlFor="ico" className="block text-sm font-medium text-gray-700">IČO</label>
-                        <input type="text" name="ico" id="ico" value={settings.ico} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary" required />
-                    </div>
-                    <div>
-                        <label htmlFor="dic" className="block text-sm font-medium text-gray-700">DIČ (pokud jste plátce DPH)</label>
-                        <input type="text" name="dic" id="dic" value={settings.dic} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary" />
-                    </div>
-                </div>
+                </section>
 
-                <hr />
-
-                <div>
-                    <h2 className="text-xl font-bold text-gray-700">Bankovní spojení</h2>
-                </div>
+                <section>
+                    <h2 className="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Bankovní spojení</h2>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <InputField label="Číslo účtu" name="bankAccount" value={formData.bankAccount} onChange={handleChange} required />
+                        <InputField label="IBAN" name="iban" value={formData.iban} onChange={handleChange} />
+                        <InputField label="SWIFT/BIC" name="swift" value={formData.swift} onChange={handleChange} />
+                    </div>
+                </section>
                 
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label htmlFor="bankAccount" className="block text-sm font-medium text-gray-700">Číslo účtu</label>
-                        <input type="text" name="bankAccount" id="bankAccount" value={settings.bankAccount} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary" />
+                <section>
+                    <h2 className="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Kontaktní údaje</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                         <InputField label="Kontaktní e-mail" name="contactEmail" type="email" value={formData.contactEmail} onChange={handleChange} required />
+                         <InputField label="Kontaktní telefon" name="contactPhone" type="tel" value={formData.contactPhone} onChange={handleChange} required />
                     </div>
-                     <div>
-                        <label htmlFor="iban" className="block text-sm font-medium text-gray-700">IBAN</label>
-                        <input type="text" name="iban" id="iban" value={settings.iban} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary" />
-                    </div>
-                      <div>
-                        <label htmlFor="swift" className="block text-sm font-medium text-gray-700">SWIFT / BIC</label>
-                        <input type="text" name="swift" id="swift" value={settings.swift} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary" />
-                    </div>
-                </div>
-
-                <hr />
-
-                 <div>
-                    <h2 className="text-xl font-bold text-gray-700">Kontaktní údaje</h2>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                     <div>
-                        <label htmlFor="contactEmail" className="block text-sm font-medium text-gray-700">Kontaktní e-mail</label>
-                        <input type="email" name="contactEmail" id="contactEmail" value={settings.contactEmail} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary" />
-                    </div>
-                     <div>
-                        <label htmlFor="contactPhone" className="block text-sm font-medium text-gray-700">Kontaktní telefon</label>
-                        <input type="tel" name="contactPhone" id="contactPhone" value={settings.contactPhone} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary" />
-                    </div>
-                </div>
+                </section>
 
                 <div className="flex justify-end items-center pt-4">
-                     {saveSuccess && <span className="text-green-600 font-semibold mr-4">Nastavení bylo úspěšně uloženo!</span>}
-                    <button type="submit" disabled={isSaving} className="py-2 px-6 rounded-lg bg-primary text-white font-semibold hover:bg-primary-hover disabled:bg-gray-400 flex items-center">
-                        {isSaving ? <Loader className="w-5 h-5 animate-spin mr-2" /> : <Save className="w-5 h-5 mr-2" />}
-                        {isSaving ? 'Ukládám...' : 'Uložit změny'}
+                    {saveSuccess && <p className="text-green-600 mr-4 transition-opacity duration-300">Nastavení bylo úspěšně uloženo.</p>}
+                    <button type="submit" disabled={isSaving} className="bg-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-primary-hover transition-colors flex items-center disabled:bg-gray-400">
+                        {isSaving ? (
+                            <Loader className="w-5 h-5 mr-2 animate-spin" />
+                        ) : (
+                            <Save className="w-5 h-5 mr-2" />
+                        )}
+                        {isSaving ? 'Ukládám...' : 'Uložit nastavení'}
                     </button>
                 </div>
             </form>
