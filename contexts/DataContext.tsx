@@ -45,7 +45,7 @@ interface DataContextActions {
     addService: (serviceData: Omit<VehicleService, 'id'>) => Promise<void>;
     updateService: (serviceId: string, updates: Partial<VehicleService>) => Promise<void>;
     addDamage: (damageData: { vehicleId: string; reservationId: string; description: string; location: string; imageFile: File; }) => Promise<void>;
-    createOnlineReservation: (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>) => Promise<void>;
+    createOnlineReservation: (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>, destination?: string, estimatedMileage?: number) => Promise<void>;
     updateSettings: (settingsData: Omit<CompanySettings, 'id'>) => Promise<void>;
     addInvoice: (invoiceData: Omit<Invoice, 'id'>) => Promise<Invoice>;
     setReservationToEdit: (reservation: Reservation | null) => void;
@@ -534,8 +534,8 @@ ${signatureImgTag}
             await api.addDamage(damageData);
             await refreshData();
         },
-        createOnlineReservation: async (vehicleId, startDate, endDate, customerData) => {
-            await api.createOnlineReservation(vehicleId, startDate, endDate, customerData);
+        createOnlineReservation: async (vehicleId, startDate, endDate, customerData, destination, estimatedMileage) => {
+            await api.createOnlineReservation(vehicleId, startDate, endDate, customerData, destination, estimatedMileage);
             await refreshData();
         },
         updateSettings: async (settingsData) => {

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, FormEvent, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
 import { Customer, Reservation, Vehicle } from '../types';
-import { CheckCircle, Loader, Clock } from 'lucide-react';
+import { CheckCircle, Loader, Clock, MapPin, HandCoins, Phone, Mail } from 'lucide-react';
 import { getPublicBookingData } from '../services/api';
 import { calculateTotalPrice } from '../contexts/DataContext'; // Import centralizované funkce
 
@@ -42,10 +42,13 @@ const OnlineBooking: React.FC = () => {
     const [customerData, setCustomerData] = useState<Omit<Customer, 'id'>>({
         firstName: '', lastName: '', email: '', phone: '', driverLicenseNumber: '', address: '', ico: ''
     });
+    const [destination, setDestination] = useState('');
+    const [estimatedMileage, setEstimatedMileage] = useState('');
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string>('');
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [submittedData, setSubmittedData] = useState<any>(null);
     const [displayVehicles, setDisplayVehicles] = useState<DisplayVehicle[]>([]);
     const [calculating, setCalculating] = useState(false);
 
@@ -183,7 +186,8 @@ const OnlineBooking: React.FC = () => {
         }
         setIsProcessing(true);
         try {
-            await actions.createOnlineReservation(selectedVehicleId, startDateObj, endDateObj, customerData);
+            await actions.createOnlineReservation(selectedVehicleId, startDateObj, endDateObj, customerData, destination, estimatedMileage ? parseInt(estimatedMileage) : undefined);
+            setSubmittedData({ customerData, selectedVehicle, startDateObj, endDateObj });
             setIsSubmitted(true);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Rezervaci se nepodařilo vytvořit.');
@@ -199,21 +203,59 @@ const OnlineBooking: React.FC = () => {
         );
     }
     
-    if (isSubmitted) {
+    if (isSubmitted && submittedData) {
+        const handleSendMail = () => {
+            const { customerData, selectedVehicle, startDateObj, endDateObj } = submittedData;
+            const subject = `Potvrzení o přijetí poptávky na pronájem vozidla`;
+            const body = `Dobrý den, ${customerData.firstName},
+
+děkujeme za Váš zájem. Tímto potvrzujeme přijetí Vaší poptávky na pronájem vozidla ${selectedVehicle.name}.
+
+Souhrn:
+Vozidlo: ${selectedVehicle.name}
+Od: ${startDateObj.toLocaleString('cs-CZ')}
+Do: ${endDateObj.toLocaleString('cs-CZ')}
+
+Nyní Vaši rezervaci zpracováváme a brzy se Vám ozveme s finálním potvrzením.
+
+-- DŮLEŽITÉ INFORMACE --
+
+- Adresa pro vyzvednutí: parkoviště Teslova (po pravé straně od vjezdu).
+- Vratná kauce: Při převzetí vozidla se skládá vratná kauce 5 000 Kč (v hotovosti nebo přes QR kód).
+- Kontakt na nás: 776 333 301
+
+Děkujeme a těšíme se na Vás,
+Váš tým pujcimedodavky.cz`;
+            
+            const mailtoLink = `mailto:${customerData.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            window.location.href = mailtoLink;
+        };
+
         return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-green-50 text-center p-4">
                  <CheckCircle className="w-16 h-16 text-green-600 mb-4" />
-                <h1 className="text-3xl font-bold text-green-800">Děkujeme za vaši rezervaci!</h1>
-                <p className="mt-2 text-lg text-gray-700">Vaše rezervace byla úspěšně odeslána.</p>
-                <p className="mt-1 text-gray-600">Brzy se vám ozveme s potvrzením a dalšími instrukcemi.</p>
+                <h1 className="text-3xl font-bold text-green-800">Děkujeme, Vaše poptávka byla přijata!</h1>
+                <p className="mt-2 text-lg text-gray-700 max-w-2xl">Vaši poptávku nyní zpracováváme. Brzy se vám ozveme s finálním potvrzením rezervace.</p>
+                
+                <div className="mt-8 text-left bg-white p-6 rounded-lg shadow-md max-w-lg w-full">
+                    <h2 className="text-xl font-bold mb-4 text-gray-800 border-b pb-2">Důležité informace</h2>
+                    <ul className="space-y-3 text-gray-700">
+                        <li className="flex items-start"><HandCoins className="w-5 h-5 mr-3 mt-1 text-primary flex-shrink-0" /><span>Při převzetí vozidla se skládá vratná kauce <strong>5 000 Kč</strong> (v hotovosti nebo přes QR kód).</span></li>
+                        <li className="flex items-start"><MapPin className="w-5 h-5 mr-3 mt-1 text-primary flex-shrink-0" /><span>Adresa pro vyzvednutí: <strong>parkoviště Teslova (po pravé straně od vjezdu)</strong>.</span></li>
+                        <li className="flex items-start"><Phone className="w-5 h-5 mr-3 mt-1 text-primary flex-shrink-0" /><span>V případě dotazů nás kontaktujte na telefonu <strong>776 333 301</strong>.</span></li>
+                    </ul>
+                    <button onClick={handleSendMail} className="w-full mt-6 bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center">
+                        <Mail className="w-5 h-5 mr-2" /> Odeslat souhrn na můj e-mail
+                    </button>
+                </div>
+
                 <a 
                    href="https://www.pujcimedodavky.cz" 
                    target="_top" 
-                   className="mt-8 bg-primary text-white font-bold py-3 px-6 rounded-lg hover:bg-primary-hover transition-colors"
+                   className="mt-8 text-sm text-gray-600 hover:text-primary transition-colors"
                 >
                     Zpět na hlavní stránku
                 </a>
-                <p className="mt-4 text-sm text-gray-500">Toto okno nyní můžete bezpečně zavřít.</p>
             </div>
         )
     }
@@ -333,6 +375,10 @@ const OnlineBooking: React.FC = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                     <input type="text" placeholder="Číslo řidičského průkazu" value={customerData.driverLicenseNumber} onChange={e => setCustomerData({...customerData, driverLicenseNumber: e.target.value})} className="w-full p-3 border rounded-md" required={!!selectedVehicleId} />
                                     <input type="text" placeholder="IČO (volitelné)" value={customerData.ico || ''} onChange={e => setCustomerData({...customerData, ico: e.target.value})} className="w-full p-3 border rounded-md" />
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                    <input type="text" placeholder="Hlavní cíl cesty (např. Brno - Praha)" value={destination} onChange={e => setDestination(e.target.value)} className="w-full p-3 border rounded-md" />
+                                    <input type="number" placeholder="Předpokládaný nájezd (km)" value={estimatedMileage} onChange={e => setEstimatedMileage(e.target.value)} className="w-full p-3 border rounded-md" />
                                 </div>
                             </section>
                         </div>

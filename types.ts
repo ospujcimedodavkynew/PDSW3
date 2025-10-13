@@ -66,6 +66,8 @@ export interface Reservation {
     endMileage?: number;
     notes?: string;
     portalToken?: string;
+    destination?: string;
+    estimatedMileage?: number;
     // Expanded properties for easy access in components
     customer?: Customer;
     vehicle?: Vehicle;

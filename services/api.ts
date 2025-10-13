@@ -101,13 +101,15 @@ const fromReservation = (r: any): Reservation => r && ({
     endMileage: r.end_mileage,
     notes: r.notes,
     portalToken: r.portal_token,
+    destination: r.destination,
+    estimatedMileage: r.estimated_mileage,
     // Nested objects are expanded in DataContext, but if they come from DB, map them too
     customer: r.customer ? fromCustomer(r.customer) : undefined,
     vehicle: r.vehicle ? fromVehicle(r.vehicle) : undefined,
 });
 
 const toReservation = (r: Partial<Reservation>) => {
-    const { customerId, vehicleId, startDate, endDate, startMileage, endMileage, portalToken, customer, vehicle, ...rest } = r;
+    const { customerId, vehicleId, startDate, endDate, startMileage, endMileage, portalToken, customer, vehicle, estimatedMileage, ...rest } = r;
     const payload = {
         ...rest,
         customer_id: customerId,
@@ -117,6 +119,7 @@ const toReservation = (r: Partial<Reservation>) => {
         start_mileage: startMileage,
         end_mileage: endMileage,
         portal_token: portalToken,
+        estimated_mileage: estimatedMileage,
     };
     Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
     return payload;
@@ -555,14 +558,14 @@ export const submitCustomerDetails = async (token: string, customerData: Omit<Cu
     await updateReservation(foundReservation.id, { customerId: newCustomer.id, status: 'pending-approval' });
 };
 
-export const createOnlineReservation = async (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>): Promise<Reservation> => {
+export const createOnlineReservation = async (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>, destination?: string, estimatedMileage?: number): Promise<Reservation> => {
     // REFACTOR: Centralize the customer upsert logic by calling `addCustomer`,
     // which already handles checking for an existing customer and updating or creating them.
     // This removes duplicate code and ensures consistent behavior.
     const customer = await addCustomer(customerData);
 
     // Create the reservation with the correct customer ID and 'pending-approval' status.
-    const reservationData: Partial<Reservation> = { customerId: customer.id, vehicleId, startDate, endDate, status: 'pending-approval' };
+    const reservationData: Partial<Reservation> = { customerId: customer.id, vehicleId, startDate, endDate, status: 'pending-approval', destination, estimatedMileage };
     const { data, error } = await supabase.from('reservations').insert([toReservation(reservationData)]).select().single();
     return fromReservation(handleSupabaseError({ data, error }, 'create online reservation'));
 };

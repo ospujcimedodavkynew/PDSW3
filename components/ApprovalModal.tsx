@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Reservation, Page } from '../types';
 import { useData } from '../contexts/DataContext';
-import { X, Check, Trash2, Car, Calendar, User, Mail, Phone, Loader, Edit } from 'lucide-react';
+import { X, Check, Trash2, Car, Calendar, User, Mail, Phone, Loader, Edit, MapPin, Gauge } from 'lucide-react';
 import ConfirmationModal from './ConfirmationModal';
 
 interface ApprovalModalProps {
@@ -75,7 +75,7 @@ const ApprovalModal: React.FC<ApprovalModalProps> = ({ isOpen, onClose, reservat
                 onClose={handleCloseConfirmation}
                 contractInfo={confirmationInfo}
             />
-            <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-4xl">
+            <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-5xl">
                 <div className="flex justify-between items-center mb-4 border-b pb-4">
                     <h2 className="text-2xl font-bold text-gray-800">Rezervace ke schválení ({reservations.length})</h2>
                     <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200"><X className="w-6 h-6" /></button>
@@ -86,7 +86,7 @@ const ApprovalModal: React.FC<ApprovalModalProps> = ({ isOpen, onClose, reservat
                         {reservations.map(res => (
                             <div key={res.id} className="bg-gray-50 border rounded-lg p-4 flex flex-col md:flex-row justify-between items-start gap-4">
                                 <div className="flex-grow space-y-3">
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                                         <div className="flex items-start">
                                             <User className="w-4 h-4 mr-2 mt-0.5 text-gray-500 flex-shrink-0" />
                                             <div>
@@ -109,6 +109,15 @@ const ApprovalModal: React.FC<ApprovalModalProps> = ({ isOpen, onClose, reservat
                                                 <p className="font-semibold">Do: {new Date(res.endDate).toLocaleString('cs-CZ')}</p>
                                             </div>
                                         </div>
+                                        {(res.destination || res.estimatedMileage) && (
+                                            <div className="flex items-start">
+                                                <MapPin className="w-4 h-4 mr-2 mt-0.5 text-gray-500 flex-shrink-0" />
+                                                <div>
+                                                    {res.destination && <p className="font-semibold">Cíl: {res.destination}</p>}
+                                                    {res.estimatedMileage && <p className="text-gray-600 flex items-center"><Gauge className="w-3 h-3 mr-1.5" />~{res.estimatedMileage} km</p>}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="flex-shrink-0 flex flex-row md:flex-col gap-2 w-full md:w-auto">
