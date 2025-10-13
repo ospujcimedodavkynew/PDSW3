@@ -99,7 +99,6 @@ const fromReservation = (r: any): Reservation => r && ({
     status: r.status,
     startMileage: r.start_mileage,
     endMileage: r.end_mileage,
-    notes: r.notes,
     portalToken: r.portal_token,
     destination: r.destination,
     estimatedMileage: r.estimated_mileage,
@@ -109,7 +108,8 @@ const fromReservation = (r: any): Reservation => r && ({
 });
 
 const toReservation = (r: Partial<Reservation>) => {
-    const { customerId, vehicleId, startDate, endDate, startMileage, endMileage, portalToken, customer, vehicle, estimatedMileage, ...rest } = r;
+    // FIX: Explicitly destructure `destination` to ensure it's handled correctly.
+    const { customerId, vehicleId, startDate, endDate, startMileage, endMileage, portalToken, customer, vehicle, estimatedMileage, destination, ...rest } = r;
     const payload = {
         ...rest,
         customer_id: customerId,
@@ -119,6 +119,7 @@ const toReservation = (r: Partial<Reservation>) => {
         start_mileage: startMileage,
         end_mileage: endMileage,
         portal_token: portalToken,
+        destination: destination, // Explicitly map destination
         estimated_mileage: estimatedMileage,
     };
     Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
