@@ -92,66 +92,80 @@ const OnlineBooking: React.FC = () => {
             setDisplayVehicles([]);
             return;
         }
-
+    
         setCalculating(true);
         const timer = setTimeout(() => {
             const desiredStart = startDateObj;
-
+    
             const categorizedVehicles = allVehicles.map(vehicle => {
                 const displayVehicle: DisplayVehicle = {
                     ...vehicle,
-                    availabilityStatus: VehicleAvailabilityStatus.UNAVAILABLE,
+                    availabilityStatus: VehicleAvailabilityStatus.UNAVAILABLE, // Default to unavailable and prove availability
                 };
-
+    
                 if (vehicle.status === 'maintenance') {
-                    return displayVehicle;
+                    return displayVehicle; // Stays unavailable
                 }
-
-                const conflictingReservation = allReservations.find(r =>
+    
+                const vehicleReservations = allReservations.filter(r =>
                     r.vehicleId === vehicle.id &&
-                    (r.status === 'scheduled' || r.status === 'active') &&
-                    (new Date(r.endDate) > desiredStart) // Only consider reservations that are not yet finished
+                    (r.status === 'scheduled' || r.status === 'active')
                 );
-
-                if (!conflictingReservation) {
-                    displayVehicle.availabilityStatus = VehicleAvailabilityStatus.AVAILABLE_NOW;
-                    return displayVehicle;
-                }
-
-                // Check if the reservation is on the same day
-                const resEndDate = new Date(conflictingReservation.endDate);
-                if (resEndDate.getFullYear() === desiredStart.getFullYear() &&
-                    resEndDate.getMonth() === desiredStart.getMonth() &&
-                    resEndDate.getDate() === desiredStart.getDate())
-                {
+    
+                // Find if there's a reservation active AT the desired start time
+                const conflictingReservation = vehicleReservations.find(r => {
+                    // Ensure dates are valid before comparing
+                    if (!r.startDate || !r.endDate) return false;
+                    const resStart = new Date(r.startDate);
+                    const resEnd = new Date(r.endDate);
+                    // A conflict exists if the desired start time is within the reservation period
+                    return resStart < desiredStart && resEnd > desiredStart;
+                });
+    
+                if (conflictingReservation) {
+                    // Vehicle is busy. Find out when it becomes free.
+                    const resEndDate = new Date(conflictingReservation.endDate);
                     const availableFrom = new Date(resEndDate.getTime() + PREPARATION_BUFFER_MINUTES * 60000);
-                    displayVehicle.availableFrom = availableFrom;
-
-                    if (desiredStart >= availableFrom) {
-                        displayVehicle.availabilityStatus = VehicleAvailabilityStatus.AVAILABLE_NOW;
+    
+                    // Check if it becomes available later on the SAME day
+                    if (availableFrom.getFullYear() === desiredStart.getFullYear() &&
+                        availableFrom.getMonth() === desiredStart.getMonth() &&
+                        availableFrom.getDate() === desiredStart.getDate()) {
+                        
+                        // If the user's desired start is AFTER it becomes available, it's available now for them
+                        if (desiredStart >= availableFrom) {
+                            displayVehicle.availabilityStatus = VehicleAvailabilityStatus.AVAILABLE_NOW;
+                        } else {
+                            displayVehicle.availabilityStatus = VehicleAvailabilityStatus.AVAILABLE_LATER;
+                            displayVehicle.availableFrom = availableFrom;
+                        }
                     } else {
-                        displayVehicle.availabilityStatus = VehicleAvailabilityStatus.AVAILABLE_LATER;
+                        // Becomes available on a future day, so it's unavailable for the selected day
+                        displayVehicle.availabilityStatus = VehicleAvailabilityStatus.UNAVAILABLE;
                     }
+                } else {
+                    // No conflict AT the desired start time, so it's available.
+                    displayVehicle.availabilityStatus = VehicleAvailabilityStatus.AVAILABLE_NOW;
                 }
-
+    
                 return displayVehicle;
             });
-            
+    
             // Sort to show available vehicles first
             categorizedVehicles.sort((a, b) => a.availabilityStatus - b.availabilityStatus);
-
+    
             setDisplayVehicles(categorizedVehicles);
-            
-            // Deselect vehicle if it becomes unavailable
+    
+            // Deselect vehicle if it's no longer available for the chosen time
             const selectedIsStillSelectable = categorizedVehicles.find(v => v.id === selectedVehicleId)?.availabilityStatus === VehicleAvailabilityStatus.AVAILABLE_NOW;
             if (selectedVehicleId && !selectedIsStillSelectable) {
                 setSelectedVehicleId('');
             }
             
             setCalculating(false);
-        }, 300);
+        }, 300); // 300ms debounce
         return () => clearTimeout(timer);
-    }, [isDateValid, startDateObj, endDateObj, allReservations, allVehicles, selectedVehicleId, pageLoading]);
+    }, [isDateValid, startDateObj, allReservations, allVehicles, selectedVehicleId, pageLoading]);
 
 
     const selectedVehicle = useMemo(() => allVehicles.find(v => v.id === selectedVehicleId), [allVehicles, selectedVehicleId]);
