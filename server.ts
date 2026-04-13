@@ -19,6 +19,24 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// --- Middleware pro ověření uživatele ---
+const authenticateUser = async (req: any, res: any, next: any) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).json({ error: "No authorization header" });
+  }
+
+  const token = authHeader.split(" ")[1];
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+
+  if (error || !user) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+
+  req.user = user;
+  next();
+};
+
 // --- API Routes ---
 
 // Health check
@@ -26,13 +44,10 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", env: process.env.NODE_ENV });
 });
 
-  // Proxy for sensitive data - example: get all data for admin
-  app.get("/api/admin/data", async (req, res) => {
-    try {
-      // In a real app, you would verify the user's session/token here
-      // For now, we assume the frontend sends a valid request
-      
-      const [vehicles, customers, reservations, contracts, protocols, financials, services, settings, invoices] = await Promise.all([
+// Proxy for sensitive data - vyžaduje přihlášení
+app.get("/api/admin/data", authenticateUser, async (req, res) => {
+  try {
+    const [vehicles, customers, reservations, contracts, protocols, financials, services, settings, invoices] = await Promise.all([
         supabase.from('vehicles').select('*'),
         supabase.from('customers').select('*'),
         supabase.from('reservations').select('*'),
@@ -125,8 +140,8 @@ app.get("/api/health", (req, res) => {
     res.json(data);
   });
 
-  // Generic Upsert for other entities
-  app.post("/api/:table/upsert", async (req, res) => {
+  // Generic Upsert for other entities - vyžaduje přihlášení
+  app.post("/api/:table/upsert", authenticateUser, async (req, res) => {
     const { table } = req.params;
     const { data, error } = await supabase
       .from(table)
@@ -138,8 +153,8 @@ app.get("/api/health", (req, res) => {
     res.json(data);
   });
 
-  // Generic Insert
-  app.post("/api/:table", async (req, res) => {
+  // Generic Insert - vyžaduje přihlášení
+  app.post("/api/:table", authenticateUser, async (req, res) => {
     const { table } = req.params;
     const { data, error } = await supabase
       .from(table)
@@ -151,8 +166,8 @@ app.get("/api/health", (req, res) => {
     res.json(data);
   });
 
-  // Generic Update
-  app.patch("/api/:table/:id", async (req, res) => {
+  // Generic Update - vyžaduje přihlášení
+  app.patch("/api/:table/:id", authenticateUser, async (req, res) => {
     const { table, id } = req.params;
     const { data, error } = await supabase
       .from(table)
@@ -165,8 +180,8 @@ app.get("/api/health", (req, res) => {
     res.json(data);
   });
 
-  // Generic Delete
-  app.delete("/api/:table/:id", async (req, res) => {
+  // Generic Delete - vyžaduje přihlášení
+  app.delete("/api/:table/:id", authenticateUser, async (req, res) => {
     const { table, id } = req.params;
     const { error } = await supabase
       .from(table)

@@ -260,62 +260,46 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     useEffect(() => {
-        let subscription: any;
         let channel: RealtimeChannel | null = null;
         
-        const checkSession = async () => {
-            console.log("DataContext: Starting checkSession...");
-            setLoading(true);
-            try {
-                const { data: { session } } = await api.getSession();
-                console.log("DataContext: Session check complete. Session exists:", !!session);
-                setSession(session);
-                if (session) {
-                    console.log("DataContext: Fetching initial data...");
-                    await refreshData();
-                    console.log("DataContext: Initial data fetch complete.");
-                    channel = api.onNewReservation(() => {
-                        console.log("New reservation detected, refreshing data...");
-                        refreshData();
-                    });
-                }
-            } catch (err) {
-                console.error("DataContext: Error in checkSession:", err);
-            } finally {
-                console.log("DataContext: Setting loading to false.");
-                setLoading(false);
+        const setupRealtime = () => {
+            if (channel) return;
+            console.log("DataContext: Setting up realtime subscription...");
+            channel = api.onNewReservation(() => {
+                console.log("New reservation detected, refreshing data...");
+                refreshData();
+            });
+        };
+
+        const cleanupRealtime = () => {
+            if (channel) {
+                console.log("DataContext: Cleaning up realtime subscription...");
+                api.removeChannel(channel);
+                channel = null;
             }
         };
-        
-        checkSession();
-        
-        // FIX: Correctly subscribe to auth state changes. The `onAuthStateChange` function
-        // returns the subscription directly, not a nested data object. The callback also
-        // only receives the session as its single argument.
+
+        console.log("DataContext: Initializing auth listener...");
         const authSubscription = api.onAuthStateChange((newSession) => {
+            console.log("DataContext: Auth state changed. Session exists:", !!newSession);
             setSession(newSession);
+            
             if (newSession) {
-                refreshData();
-                 if (!channel) {
-                    channel = api.onNewReservation(() => {
-                        console.log("New reservation detected, refreshing data...");
-                        refreshData();
-                    });
-                }
+                refreshData().then(() => {
+                    setupRealtime();
+                    setLoading(false);
+                });
             } else {
                 setData({ vehicles: [], customers: [], reservations: [], contracts: [], handoverProtocols: [], financials: [], services: [], settings: null, invoices: [] });
-                if (channel) {
-                    api.removeChannel(channel);
-                    channel = null;
-                }
+                cleanupRealtime();
+                setLoading(false);
             }
         });
         
         return () => {
+            console.log("DataContext: Cleaning up DataProvider effect...");
             authSubscription.unsubscribe();
-            if (channel) {
-                api.removeChannel(channel);
-            }
+            cleanupRealtime();
         };
     }, [refreshData]);
 

@@ -298,10 +298,15 @@ const callApi = async (endpoint: string, options: RequestInit = {}) => {
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
+        // Získáme aktuální sezení (session) a z něj přístupový token (JWT)
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+
         const response = await fetch(`${API_BASE}${endpoint}`, {
             ...options,
             headers: {
                 'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
                 ...options.headers,
             },
             signal: controller.signal
