@@ -1,7 +1,6 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import { createServer as createViteServer } from "vite";
 import { createClient } from "@supabase/supabase-js";
 import cors from "cors";
 
@@ -16,9 +15,12 @@ async function startServer() {
   app.use(express.json());
 
   // Initialize Supabase with SERVICE_ROLE_KEY (Server-side only!)
-  // This key bypasses RLS, so it MUST stay on the server.
   const supabaseUrl = process.env.SUPABASE_URL || "";
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error("Missing Supabase environment variables!");
+  }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -206,24 +208,44 @@ async function startServer() {
 
   // --- Vite Middleware ---
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
+    // On Vercel, static files are served by Vercel itself, 
+    // but we keep this for other production environments
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+    if (require('fs').existsSync(distPath)) {
+      app.use(express.static(distPath));
+      app.get("*", (req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    }
+  }
+
+  // Vercel handles the listening, so we only listen locally or on other platforms
+  if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  return app;
+}
+
+// For local development
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  startServer().catch((err) => {
+    console.error("Failed to start server:", err);
   });
 }
 
-startServer().catch((err) => {
-  console.error("Failed to start server:", err);
-});
+// For Vercel Serverless Functions
+export default async (req: any, res: any) => {
+  const app = await startServer();
+  return app(req, res);
+};
+

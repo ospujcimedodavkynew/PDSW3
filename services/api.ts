@@ -294,18 +294,34 @@ const handleSupabaseError = ({ error, data }: { error: any, data: any }, entityN
 const API_BASE = '/api';
 
 const callApi = async (endpoint: string, options: RequestInit = {}) => {
-    const response = await fetch(`${API_BASE}${endpoint}`, {
-        ...options,
-        headers: {
-            'Content-Type': 'application/json',
-            ...options.headers,
-        },
-    });
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `API call failed: ${response.statusText}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    try {
+        const response = await fetch(`${API_BASE}${endpoint}`, {
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers,
+            },
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `API call failed: ${response.statusText}`);
+        }
+        return await response.json();
+    } catch (error: any) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            throw new Error('Server neodpovídá (timeout). Zkontrolujte, zda běží backend.');
+        }
+        console.error(`API Call failed (${endpoint}):`, error);
+        throw error;
     }
-    return response.json();
 };
 
 // --- Authentication ---
