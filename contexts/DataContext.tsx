@@ -264,17 +264,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         let channel: RealtimeChannel | null = null;
         
         const checkSession = async () => {
+            console.log("DataContext: Starting checkSession...");
             setLoading(true);
-            const { data: { session } } = await api.getSession();
-            setSession(session);
-            if (session) {
-                await refreshData();
-                channel = api.onNewReservation(() => {
-                    console.log("New reservation detected, refreshing data...");
-                    refreshData();
-                });
+            try {
+                const { data: { session } } = await api.getSession();
+                console.log("DataContext: Session check complete. Session exists:", !!session);
+                setSession(session);
+                if (session) {
+                    console.log("DataContext: Fetching initial data...");
+                    await refreshData();
+                    console.log("DataContext: Initial data fetch complete.");
+                    channel = api.onNewReservation(() => {
+                        console.log("New reservation detected, refreshing data...");
+                        refreshData();
+                    });
+                }
+            } catch (err) {
+                console.error("DataContext: Error in checkSession:", err);
+            } finally {
+                console.log("DataContext: Setting loading to false.");
+                setLoading(false);
             }
-            setLoading(false);
         };
         
         checkSession();

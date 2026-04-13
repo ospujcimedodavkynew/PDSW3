@@ -7,29 +7,24 @@ import cors from "cors";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+const app = express();
+const PORT = 3000;
 
-  app.use(cors());
-  app.use(express.json());
+app.use(cors());
+app.use(express.json());
 
-  // Initialize Supabase with SERVICE_ROLE_KEY (Server-side only!)
-  const supabaseUrl = process.env.SUPABASE_URL || "";
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+// Initialize Supabase with SERVICE_ROLE_KEY (Server-side only!)
+const supabaseUrl = process.env.SUPABASE_URL || "";
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
-  if (!supabaseUrl || !supabaseServiceKey) {
-    console.error("Missing Supabase environment variables!");
-  }
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+// --- API Routes ---
 
-  // --- API Routes ---
-
-  // Health check
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
-  });
+// Health check
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", env: process.env.NODE_ENV });
+});
 
   // Proxy for sensitive data - example: get all data for admin
   app.get("/api/admin/data", async (req, res) => {
@@ -206,7 +201,8 @@ async function startServer() {
     res.json(data);
   });
 
-  // --- Vite Middleware ---
+// --- Vite & Static Middleware ---
+const setupStatic = async () => {
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -214,38 +210,23 @@ async function startServer() {
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
-    // On Vercel, static files are served by Vercel itself, 
-    // but we keep this for other production environments
+  } else if (!process.env.VERCEL) {
+    // Only serve static files if NOT on Vercel (Vercel handles this via rewrites/static)
     const distPath = path.join(process.cwd(), "dist");
-    if (require('fs').existsSync(distPath)) {
-      app.use(express.static(distPath));
-      app.get("*", (req, res) => {
-        res.sendFile(path.join(distPath, "index.html"));
-      });
-    }
-  }
-
-  // Vercel handles the listening, so we only listen locally or on other platforms
-  if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
+};
 
-  return app;
-}
+setupStatic();
 
-// For local development
 if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
-  startServer().catch((err) => {
-    console.error("Failed to start server:", err);
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
   });
 }
 
-// For Vercel Serverless Functions
-export default async (req: any, res: any) => {
-  const app = await startServer();
-  return app(req, res);
-};
+export default app;
 
