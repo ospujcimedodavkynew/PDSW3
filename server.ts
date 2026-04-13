@@ -103,30 +103,31 @@ app.get("/api/admin/data", authenticateUser, async (req, res) => {
     res.json(data);
   });
 
-  // Public booking data
-  app.get("/api/public/booking-data", async (req, res) => {
-    try {
-      const [vehicles, reservations] = await Promise.all([
-        supabase.from('vehicles').select('*'),
-        supabase.from('reservations').select('vehicle_id, start_date, end_date, status'),
-      ]);
-      res.json({ vehicles: vehicles.data, reservations: reservations.data });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch booking data" });
-    }
-  });
+// Public booking data - vrací jen nezbytné info pro kalendář
+app.get("/api/public/booking-data", async (req, res) => {
+  try {
+    const [vehicles, reservations] = await Promise.all([
+      supabase.from('vehicles').select('id, name, make, model, year, image_url, rate4h, rate12h, daily_rate, features, current_mileage, description, dimensions'),
+      supabase.from('reservations').select('vehicle_id, start_date, end_date, status'),
+    ]);
+    res.json({ vehicles: vehicles.data, reservations: reservations.data });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch booking data" });
+  }
+});
 
-  // Reservation by token
-  app.get("/api/reservations/token/:token", async (req, res) => {
-    const { data, error } = await supabase
-      .from('reservations')
-      .select('*, vehicle:vehicles(*)')
-      .eq('portal_token', req.params.token)
-      .maybeSingle();
+// Reservation by token - vrací jen jednu konkrétní rezervaci
+app.get("/api/reservations/token/:token", async (req, res) => {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select('*, vehicle:vehicles(*)')
+    .eq('portal_token', req.params.token)
+    .maybeSingle();
 
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
-  });
+  if (error) return res.status(500).json({ error: error.message });
+  if (!data) return res.status(404).json({ error: "Reservation not found" });
+  res.json(data);
+});
 
   // Contract by ID
   app.get("/api/contracts/:id", async (req, res) => {
@@ -140,31 +141,52 @@ app.get("/api/admin/data", authenticateUser, async (req, res) => {
     res.json(data);
   });
 
-  // Generic Upsert for other entities - vyžaduje přihlášení
-  app.post("/api/:table/upsert", authenticateUser, async (req, res) => {
-    const { table } = req.params;
-    const { data, error } = await supabase
-      .from(table)
-      .upsert(req.body)
-      .select()
-      .single();
+// Generic Upsert for other entities
+app.post("/api/:table/upsert", async (req, res) => {
+  const { table } = req.params;
+  
+  // Zabezpečení: Pouze tabulka 'customers' může být upsertována veřejně (pro rezervace)
+  // Ostatní tabulky vyžadují přihlášení
+  if (table !== 'customers') {
+    return authenticateUser(req, res, async () => {
+      const { data, error } = await supabase.from(table).upsert(req.body).select().single();
+      if (error) return res.status(500).json({ error: error.message });
+      res.json(data);
+    });
+  }
 
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
-  });
+  const { data, error } = await supabase
+    .from(table)
+    .upsert(req.body)
+    .select()
+    .single();
 
-  // Generic Insert - vyžaduje přihlášení
-  app.post("/api/:table", authenticateUser, async (req, res) => {
-    const { table } = req.params;
-    const { data, error } = await supabase
-      .from(table)
-      .insert([req.body])
-      .select()
-      .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
 
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
-  });
+// Generic Insert
+app.post("/api/:table", async (req, res) => {
+  const { table } = req.params;
+
+  // Zabezpečení: Pouze tabulka 'reservations' může být vytvořena veřejně
+  if (table !== 'reservations') {
+    return authenticateUser(req, res, async () => {
+      const { data, error } = await supabase.from(table).insert([req.body]).select().single();
+      if (error) return res.status(500).json({ error: error.message });
+      res.json(data);
+    });
+  }
+
+  const { data, error } = await supabase
+    .from(table)
+    .insert([req.body])
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
 
   // Generic Update - vyžaduje přihlášení
   app.patch("/api/:table/:id", authenticateUser, async (req, res) => {
