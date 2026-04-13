@@ -99,17 +99,15 @@ const fromReservation = (r: any): Reservation => r && ({
     status: r.status,
     startMileage: r.start_mileage,
     endMileage: r.end_mileage,
+    notes: r.notes,
     portalToken: r.portal_token,
-    destination: r.destination,
-    estimatedMileage: r.estimated_mileage,
     // Nested objects are expanded in DataContext, but if they come from DB, map them too
     customer: r.customer ? fromCustomer(r.customer) : undefined,
     vehicle: r.vehicle ? fromVehicle(r.vehicle) : undefined,
 });
 
 const toReservation = (r: Partial<Reservation>) => {
-    // FIX: Explicitly destructure `destination` to ensure it's handled correctly.
-    const { customerId, vehicleId, startDate, endDate, startMileage, endMileage, portalToken, customer, vehicle, estimatedMileage, destination, ...rest } = r;
+    const { customerId, vehicleId, startDate, endDate, startMileage, endMileage, portalToken, customer, vehicle, ...rest } = r;
     const payload = {
         ...rest,
         customer_id: customerId,
@@ -119,8 +117,6 @@ const toReservation = (r: Partial<Reservation>) => {
         start_mileage: startMileage,
         end_mileage: endMileage,
         portal_token: portalToken,
-        destination: destination, // Explicitly map destination
-        estimated_mileage: estimatedMileage,
     };
     Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
     return payload;
@@ -294,6 +290,24 @@ const handleSupabaseError = ({ error, data }: { error: any, data: any }, entityN
     return data;
 };
 
+// --- API Helpers ---
+const API_BASE = '/api';
+
+const callApi = async (endpoint: string, options: RequestInit = {}) => {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers: {
+            'Content-Type': 'application/json',
+            ...options.headers,
+        },
+    });
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `API call failed: ${response.statusText}`);
+    }
+    return response.json();
+};
+
 // --- Authentication ---
 export const signInWithPassword = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -330,75 +344,39 @@ export const removeChannel = (channel: RealtimeChannel) => {
 
 // --- Data Fetching (For Authenticated Admin) ---
 export const getAllData = async () => {
-    const [vehiclesRes, customersRes, reservationsRes, contractsRes, protocolsRes, financialsRes, servicesRes, settingsRes, invoicesRes] = await Promise.all([
-        supabase.from('vehicles').select('*'),
-        supabase.from('customers').select('*'),
-        supabase.from('reservations').select('*'),
-        supabase.from('contracts').select('*'),
-        supabase.from('handover_protocols').select('*'),
-        supabase.from('financial_transactions').select('*'),
-        supabase.from('vehicle_services').select('*'),
-        supabase.from('company_settings').select('*').limit(1).single(),
-        supabase.from('invoices').select('*'),
-    ]);
-
-    // Handle potential errors for all fetches
-    handleSupabaseError(vehiclesRes, 'vehicles');
-    handleSupabaseError(customersRes, 'customers');
-    handleSupabaseError(reservationsRes, 'reservations');
-    handleSupabaseError(contractsRes, 'contracts');
-    handleSupabaseError(protocolsRes, 'handover_protocols');
-    handleSupabaseError(financialsRes, 'financials');
-    handleSupabaseError(servicesRes, 'services');
-    handleSupabaseError(invoicesRes, 'invoices');
-    // Settings can be null if not set, that's okay, so no error handling
+    const data = await callApi('/admin/data');
     
     return {
-        vehicles: vehiclesRes.data!.map(fromVehicle),
-        customers: customersRes.data!.map(fromCustomer),
-        reservations: reservationsRes.data!.map(fromReservation),
-        contracts: contractsRes.data!.map(fromContract),
-        handoverProtocols: protocolsRes.data!.map(fromHandoverProtocol),
-        financials: financialsRes.data!.map(fromFinancial),
-        services: servicesRes.data!.map(fromService),
-        settings: settingsRes.data ? fromSettings(settingsRes.data) : null,
-        invoices: invoicesRes.data!.map(fromInvoice),
+        vehicles: (data.vehicles || []).map(fromVehicle),
+        customers: (data.customers || []).map(fromCustomer),
+        reservations: (data.reservations || []).map(fromReservation),
+        contracts: (data.contracts || []).map(fromContract),
+        handoverProtocols: (data.handoverProtocols || []).map(fromHandoverProtocol),
+        financials: (data.financials || []).map(fromFinancial),
+        services: (data.services || []).map(fromService),
+        settings: data.settings ? fromSettings(data.settings) : null,
+        invoices: (data.invoices || []).map(fromInvoice),
     };
 };
 
 // --- Data Fetching (For Public Pages) ---
 export const getPublicBookingData = async () => {
-    const [vehiclesRes, reservationsRes] = await Promise.all([
-        supabase.from('vehicles').select('*'),
-        // Only select columns needed for availability check to be efficient and secure
-        supabase.from('reservations').select('vehicle_id, start_date, end_date, status'),
-    ]);
-
-    handleSupabaseError(vehiclesRes, 'public vehicles');
-    handleSupabaseError(reservationsRes, 'public reservations');
+    const data = await callApi('/public/booking-data');
     
     return {
-        vehicles: vehiclesRes.data!.map(fromVehicle),
-        // Note: fromReservation can handle partial data
-        reservations: reservationsRes.data!.map(fromReservation),
+        vehicles: (data.vehicles || []).map(fromVehicle),
+        reservations: (data.reservations || []).map(fromReservation),
     };
 };
 
 export const getReservationByToken = async (token: string): Promise<Reservation | null> => {
-    const { data, error } = await supabase.from('reservations').select('*, vehicle:vehicles(*)').eq('portal_token', token).single();
-    return fromReservation(handleSupabaseError({ data, error }, 'reservation by token'));
+    const data = await callApi(`/reservations/token/${token}`);
+    return fromReservation(data);
 };
 
 export const getContractById = async (id: string): Promise<Contract | null> => {
-    const { data, error } = await supabase
-        .from('contracts')
-        .select('*, customer:customers(*), vehicle:vehicles(*)')
-        .eq('id', id)
-        .single();
-    
-    if (error || !data) {
-        return handleSupabaseError({ data, error }, 'contract by id');
-    }
+    const data = await callApi(`/contracts/${id}`);
+    if (!data) return null;
     
     const contract = fromContract(data);
     if (data.customer) contract.customer = fromCustomer(data.customer);
@@ -408,13 +386,13 @@ export const getContractById = async (id: string): Promise<Contract | null> => {
 
 
 export const getServicesForVehicle = async (vehicleId: string): Promise<VehicleService[]> => {
-    const { data, error } = await supabase.from('vehicle_services').select('*').eq('vehicle_id', vehicleId).order('service_date', { ascending: false });
-    return (handleSupabaseError({ data, error }, 'vehicle services') as any[]).map(fromService);
+    const data = await callApi(`/vehicles/${vehicleId}/services`);
+    return (data as any[]).map(fromService);
 };
 
 export const getDamagesForVehicle = async (vehicleId: string): Promise<VehicleDamage[]> => {
-    const { data, error } = await supabase.from('vehicle_damages').select('*, reservation:reservations(*, customer:customers(*))').eq('vehicle_id', vehicleId).order('reported_at', { ascending: false });
-    return (handleSupabaseError({ data, error }, 'vehicle damages') as any[]).map(fromDamage);
+    const data = await callApi(`/vehicles/${vehicleId}/damages`);
+    return (data as any[]).map(fromDamage);
 };
 
 // --- Data Mutation ---
@@ -429,104 +407,106 @@ export const uploadFile = async (bucket: string, path: string, file: File): Prom
 };
 
 export const addCustomer = async (customerData: Omit<Customer, 'id'>): Promise<Customer> => {
-    // Check if a customer with this email already exists to prevent duplicate errors.
-    const { data: existingCustomerData, error: findError } = await supabase
-        .from('customers')
-        .select('id') // Only need the ID for the check and update
-        .eq('email', customerData.email)
-        .maybeSingle(); // Use maybeSingle to avoid error if no customer is found
-
-    if (findError) {
-        throw handleSupabaseError({ error: findError, data: null }, 'find existing customer');
-    }
-
-    if (existingCustomerData) {
-        // Customer exists: update their details with the new data provided by the user.
-        const updatedCustomer = await updateCustomer({ id: existingCustomerData.id, ...customerData });
-        return updatedCustomer;
-    } else {
-        // Customer does not exist: create a new one.
-        const { data, error } = await supabase.from('customers').insert([toCustomer(customerData)]).select().single();
-        return fromCustomer(handleSupabaseError({ data, error }, 'add customer'));
-    }
+    const data = await callApi('/customers/upsert', {
+        method: 'POST',
+        body: JSON.stringify(toCustomer(customerData)),
+    });
+    return fromCustomer(data);
 };
 
 export const updateCustomer = async (customerData: Customer): Promise<Customer> => {
-    // FIX: Removed .single() and added robust handling for the response array.
-    // This prevents the "Cannot coerce result" error when RLS policies for anonymous users
-    // allow an UPDATE but not a subsequent SELECT on the updated row.
-    const { data, error } = await supabase
-        .from('customers')
-        .update(toCustomer(customerData))
-        .eq('id', customerData.id)
-        .select();
-
-    const result = handleSupabaseError({ data, error }, 'update customer');
-
-    if (!result || result.length === 0) {
-        // This can happen if RLS prevents SELECT after UPDATE.
-        // Assume update was successful and return the submitted data.
-        return customerData;
-    }
-
-    return fromCustomer(result[0]);
+    const data = await callApi('/customers/upsert', {
+        method: 'POST',
+        body: JSON.stringify(toCustomer(customerData)),
+    });
+    return fromCustomer(data);
 };
 
-
 export const addVehicle = async (vehicleData: Omit<Vehicle, 'id'>): Promise<Vehicle> => {
-    const { data, error } = await supabase.from('vehicles').insert([toVehicle(vehicleData)]).select().single();
-    return fromVehicle(handleSupabaseError({ data, error }, 'add vehicle'));
+    const data = await callApi('/vehicles', {
+        method: 'POST',
+        body: JSON.stringify(toVehicle(vehicleData)),
+    });
+    return fromVehicle(data);
 };
 
 export const updateVehicle = async (vehicleData: Vehicle): Promise<Vehicle> => {
-    const { data, error } = await supabase.from('vehicles').update(toVehicle(vehicleData)).eq('id', vehicleData.id).select().single();
-    return fromVehicle(handleSupabaseError({ data, error }, 'update vehicle'));
+    const data = await callApi(`/vehicles/${vehicleData.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(toVehicle(vehicleData)),
+    });
+    return fromVehicle(data);
 };
 
 export const addReservation = async (reservationData: Omit<Reservation, 'id' | 'status'>): Promise<Reservation> => {
     const payload = { ...toReservation(reservationData), status: 'scheduled' };
-    const { data, error } = await supabase.from('reservations').insert([payload]).select().single();
-    return fromReservation(handleSupabaseError({ data, error }, 'add reservation'));
+    const data = await callApi('/reservations', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    });
+    return fromReservation(data);
 };
 
 export const updateReservation = async (reservationId: string, updates: Partial<Reservation>): Promise<Reservation> => {
-    const { data, error } = await supabase.from('reservations').update(toReservation(updates)).eq('id', reservationId).select().single();
-    return fromReservation(handleSupabaseError({ data, error }, 'update reservation'));
+    const data = await callApi(`/reservations/${reservationId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(toReservation(updates)),
+    });
+    return fromReservation(data);
 };
 
 export const deleteReservation = async (reservationId: string): Promise<void> => {
-    const { error } = await supabase.from('reservations').delete().eq('id', reservationId);
-    handleSupabaseError({ data: null, error }, 'delete reservation');
+    await callApi(`/reservations/${reservationId}`, {
+        method: 'DELETE',
+    });
 };
 
 export const addContract = async (contractData: Omit<Contract, 'id'>): Promise<Contract> => {
-    const { data, error } = await supabase.from('contracts').insert([toContract(contractData)]).select().single();
-    return fromContract(handleSupabaseError({ data, error }, 'add contract'));
+    const data = await callApi('/contracts', {
+        method: 'POST',
+        body: JSON.stringify(toContract(contractData)),
+    });
+    return fromContract(data);
 };
 
 export const updateContract = async (contractId: string, updates: Partial<Contract>): Promise<Contract> => {
-    const { data, error } = await supabase.from('contracts').update(toContract(updates)).eq('id', contractId).select().single();
-    return fromContract(handleSupabaseError({ data, error }, 'update contract'));
+    const data = await callApi(`/contracts/${contractId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(toContract(updates)),
+    });
+    return fromContract(data);
 };
 
 export const addHandoverProtocol = async (protocolData: Omit<HandoverProtocol, 'id'>): Promise<HandoverProtocol> => {
-    const { data, error } = await supabase.from('handover_protocols').insert([toHandoverProtocol(protocolData)]).select().single();
-    return fromHandoverProtocol(handleSupabaseError({ data, error }, 'add handover protocol'));
+    const data = await callApi('/handover_protocols', {
+        method: 'POST',
+        body: JSON.stringify(toHandoverProtocol(protocolData)),
+    });
+    return fromHandoverProtocol(data);
 };
 
 export const addFinancialTransaction = async (transactionData: Omit<FinancialTransaction, 'id'>): Promise<FinancialTransaction> => {
-    const { data, error } = await supabase.from('financial_transactions').insert([toFinancial(transactionData)]).select().single();
-    return fromFinancial(handleSupabaseError({ data, error }, 'add financial transaction'));
+    const data = await callApi('/financial_transactions', {
+        method: 'POST',
+        body: JSON.stringify(toFinancial(transactionData)),
+    });
+    return fromFinancial(data);
 };
 
 export const addService = async (serviceData: Omit<VehicleService, 'id'>): Promise<VehicleService> => {
-    const { data, error } = await supabase.from('vehicle_services').insert([toService(serviceData)]).select().single();
-    return fromService(handleSupabaseError({ data, error }, 'add service'));
+    const data = await callApi('/vehicle_services', {
+        method: 'POST',
+        body: JSON.stringify(toService(serviceData)),
+    });
+    return fromService(data);
 };
 
 export const updateService = async (serviceId: string, updates: Partial<VehicleService>): Promise<VehicleService> => {
-    const { data, error } = await supabase.from('vehicle_services').update(toService(updates)).eq('id', serviceId).select().single();
-    return fromService(handleSupabaseError({ data, error }, 'update service'));
+    const data = await callApi(`/vehicle_services/${serviceId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(toService(updates)),
+    });
+    return fromService(data);
 };
 
 export const addDamage = async (damageData: { vehicleId: string; reservationId: string; description: string; location: string; imageFile: File; }): Promise<VehicleDamage> => {
@@ -535,20 +515,27 @@ export const addDamage = async (damageData: { vehicleId: string; reservationId: 
     const filePath = `${fileName}`;
     const imageUrl = await uploadFile('damages', filePath, imageFile);
     const payload: Omit<VehicleDamage, 'id'> = { vehicleId, reservationId, description, location, imageUrl, reportedAt: new Date(), status: 'reported' };
-    const { data, error } = await supabase.from('vehicle_damages').insert([toDamage(payload)]).select().single();
-    return fromDamage(handleSupabaseError({ data, error }, 'add damage'));
+    
+    const data = await callApi('/vehicle_damages', {
+        method: 'POST',
+        body: JSON.stringify(toDamage(payload)),
+    });
+    return fromDamage(data);
 };
 
 export const createPendingReservation = async (vehicleId: string, startDate: Date, endDate: Date): Promise<Reservation> => {
     const portalToken = `${Date.now()}${Math.random().toString(36).substring(2, 15)}`;
     const reservationData: Partial<Reservation> = { vehicleId, startDate, endDate, status: 'pending-customer', portalToken };
-    const { data, error } = await supabase.from('reservations').insert([toReservation(reservationData)]).select().single();
-    return fromReservation(handleSupabaseError({ data, error }, 'create pending reservation'));
+    
+    const data = await callApi('/reservations', {
+        method: 'POST',
+        body: JSON.stringify(toReservation(reservationData)),
+    });
+    return fromReservation(data);
 };
 
 export const submitCustomerDetails = async (token: string, customerData: Omit<Customer, 'id' | 'driverLicenseImageUrl'>, driverLicenseFile: File): Promise<void> => {
-    const { data: reservation, error: reservationError } = await supabase.from('reservations').select('*').eq('portal_token', token).single();
-    const foundReservation = fromReservation(handleSupabaseError({ data: reservation, error: reservationError }, 'find reservation for submission'));
+    const foundReservation = await getReservationByToken(token);
     if (!foundReservation) throw new Error("Reservation not found for this token.");
     if (foundReservation.status !== 'pending-customer') throw new Error("This reservation has already been processed.");
 
@@ -559,28 +546,34 @@ export const submitCustomerDetails = async (token: string, customerData: Omit<Cu
     await updateReservation(foundReservation.id, { customerId: newCustomer.id, status: 'pending-approval' });
 };
 
-export const createOnlineReservation = async (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>, destination?: string, estimatedMileage?: number): Promise<Reservation> => {
+export const createOnlineReservation = async (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>): Promise<Reservation> => {
     // REFACTOR: Centralize the customer upsert logic by calling `addCustomer`,
     // which already handles checking for an existing customer and updating or creating them.
     // This removes duplicate code and ensures consistent behavior.
     const customer = await addCustomer(customerData);
 
     // Create the reservation with the correct customer ID and 'pending-approval' status.
-    const reservationData: Partial<Reservation> = { customerId: customer.id, vehicleId, startDate, endDate, status: 'pending-approval', destination, estimatedMileage };
-    const { data, error } = await supabase.from('reservations').insert([toReservation(reservationData)]).select().single();
-    return fromReservation(handleSupabaseError({ data, error }, 'create online reservation'));
+    const reservationData: Partial<Reservation> = { customerId: customer.id, vehicleId, startDate, endDate, status: 'pending-approval' };
+    
+    const data = await callApi('/reservations', {
+        method: 'POST',
+        body: JSON.stringify(toReservation(reservationData)),
+    });
+    return fromReservation(data);
 };
 
 export const updateSettings = async (settingsData: Omit<CompanySettings, 'id'>): Promise<CompanySettings> => {
-    const { data, error } = await supabase
-        .from('company_settings')
-        .upsert({ id: 1, ...toSettings(settingsData) }) // Use upsert with a fixed ID
-        .select()
-        .single();
-    return fromSettings(handleSupabaseError({ data, error }, 'update settings'));
+    const data = await callApi('/company_settings/upsert', {
+        method: 'POST',
+        body: JSON.stringify({ id: 1, ...toSettings(settingsData) }),
+    });
+    return fromSettings(data);
 };
 
 export const addInvoice = async (invoiceData: Omit<Invoice, 'id'>): Promise<Invoice> => {
-    const { data, error } = await supabase.from('invoices').insert([toInvoice(invoiceData)]).select().single();
-    return fromInvoice(handleSupabaseError({ data, error }, 'add invoice'));
+    const data = await callApi('/invoices', {
+        method: 'POST',
+        body: JSON.stringify(toInvoice(invoiceData)),
+    });
+    return fromInvoice(data);
 };

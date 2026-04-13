@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import './index.css'; // Add this line to link the CSS file
 import './services/supabaseClient'; // Ensure Supabase is initialized
 import './contexts/DataContext.tsx'; // Ensure the context file is part of the bundle
 
