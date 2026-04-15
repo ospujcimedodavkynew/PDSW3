@@ -158,18 +158,22 @@ app.post("/api/:table/upsert", async (req, res) => {
   try {
     // MANUÁLNÍ UPSERT PRO ZÁKAZNÍKY (100% spolehlivost proti chybě duplicate email)
     if (table === 'customers' && req.body.email) {
-      // 1. Zkusíme najít existujícího zákazníka podle e-mailu
+      const email = req.body.email.toLowerCase().trim();
+      
+      // 1. Zkusíme najít existujícího zákazníka (case-insensitive)
       const { data: existingCustomer } = await supabase
         .from('customers')
         .select('id')
-        .eq('email', req.body.email)
+        .ilike('email', email)
         .maybeSingle();
 
       if (existingCustomer) {
-        // 2. Pokud existuje, aktualizujeme ho
+        console.log(`Updating existing customer: ${email} (ID: ${existingCustomer.id})`);
+        // Odstraníme ID z body, abychom předešli konfliktům, a použijeme to nalezené
+        const { id, ...updateData } = req.body;
         const { data, error } = await supabase
           .from('customers')
-          .update(req.body)
+          .update({ ...updateData, email }) // Zajistíme malá písmena
           .eq('id', existingCustomer.id)
           .select()
           .single();
@@ -177,16 +181,45 @@ app.post("/api/:table/upsert", async (req, res) => {
         if (error) throw error;
         return res.json(data);
       }
+      
+      // Pokud neexistuje, zajistíme, že email je malými písmeny i pro insert
+      req.body.email = email;
     }
 
-    // 3. Pokud neexistuje (nebo to není tabulka customers), vložíme nový záznam
+    // 3. Vložíme nový záznam (pokud neexistuje)
+    // Odstraníme případné prázdné ID, aby si ho vygenerovala databáze sama
+    const payload = { ...req.body };
+    if (!payload.id) delete payload.id;
+
     const { data, error } = await supabase
       .from(table)
-      .insert([req.body])
+      .insert([payload])
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // Pokud i přes naši kontrolu dojde k chybě unikátního klíče, zkusíme to ještě jednou najít
+      // (může se stát při extrémně rychlých dvou kliknutích)
+      if (error.code === '23505' && table === 'customers') {
+         const { data: retryCustomer } = await supabase
+          .from('customers')
+          .select('id')
+          .ilike('email', req.body.email)
+          .maybeSingle();
+          
+         if (retryCustomer) {
+           const { id, ...updateData } = req.body;
+           const { data: retryData, error: retryError } = await supabase
+            .from('customers')
+            .update(updateData)
+            .eq('id', retryCustomer.id)
+            .select()
+            .single();
+           if (!retryError) return res.json(retryData);
+         }
+      }
+      throw error;
+    }
     res.json(data);
   } catch (error: any) {
     console.error(`Upsert error for ${table}:`, error);
