@@ -155,18 +155,43 @@ app.post("/api/:table/upsert", async (req, res) => {
     });
   }
 
-  // FIX: Pro tabulku 'customers' musíme specifikovat, že při shodě e-mailu se má záznam aktualizovat (upsert),
-  // nikoliv se snažit vložit nový (což vyvolá chybu Duplicate Key).
-  const upsertOptions = table === 'customers' ? { onConflict: 'email' } : {};
+  try {
+    // MANUÁLNÍ UPSERT PRO ZÁKAZNÍKY (100% spolehlivost proti chybě duplicate email)
+    if (table === 'customers' && req.body.email) {
+      // 1. Zkusíme najít existujícího zákazníka podle e-mailu
+      const { data: existingCustomer } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('email', req.body.email)
+        .maybeSingle();
 
-  const { data, error } = await supabase
-    .from(table)
-    .upsert(req.body, upsertOptions)
-    .select()
-    .single();
+      if (existingCustomer) {
+        // 2. Pokud existuje, aktualizujeme ho
+        const { data, error } = await supabase
+          .from('customers')
+          .update(req.body)
+          .eq('id', existingCustomer.id)
+          .select()
+          .single();
+        
+        if (error) throw error;
+        return res.json(data);
+      }
+    }
 
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+    // 3. Pokud neexistuje (nebo to není tabulka customers), vložíme nový záznam
+    const { data, error } = await supabase
+      .from(table)
+      .insert([req.body])
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error: any) {
+    console.error(`Upsert error for ${table}:`, error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Generic Insert
@@ -192,19 +217,29 @@ app.post("/api/:table", async (req, res) => {
   res.json(data);
 });
 
-  // Generic Update - vyžaduje přihlášení
-  app.patch("/api/:table/:id", authenticateUser, async (req, res) => {
-    const { table, id } = req.params;
-    const { data, error } = await supabase
-      .from(table)
-      .update(req.body)
-      .eq('id', id)
-      .select()
-      .single();
+// Generic Update
+app.patch("/api/:table/:id", async (req, res) => {
+  const { table, id } = req.params;
 
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
-  });
+  // Zabezpečení: Pouze tabulka 'reservations' může být aktualizována veřejně (pro dokončení údajů zákazníkem)
+  if (table !== 'reservations') {
+    return authenticateUser(req, res, async () => {
+      const { data, error } = await supabase.from(table).update(req.body).eq('id', id).select().single();
+      if (error) return res.status(500).json({ error: error.message });
+      res.json(data);
+    });
+  }
+
+  const { data, error } = await supabase
+    .from(table)
+    .update(req.body)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
 
   // Generic Delete - vyžaduje přihlášení
   app.delete("/api/:table/:id", authenticateUser, async (req, res) => {
