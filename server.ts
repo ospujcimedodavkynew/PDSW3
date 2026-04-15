@@ -155,9 +155,13 @@ app.post("/api/:table/upsert", async (req, res) => {
     });
   }
 
+  // FIX: Pro tabulku 'customers' musíme specifikovat, že při shodě e-mailu se má záznam aktualizovat (upsert),
+  // nikoliv se snažit vložit nový (což vyvolá chybu Duplicate Key).
+  const upsertOptions = table === 'customers' ? { onConflict: 'email' } : {};
+
   const { data, error } = await supabase
     .from(table)
-    .upsert(req.body)
+    .upsert(req.body, upsertOptions)
     .select()
     .single();
 
