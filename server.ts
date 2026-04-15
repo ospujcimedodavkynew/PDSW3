@@ -90,19 +90,6 @@ app.get("/api/admin/data", authenticateUser, async (req, res) => {
     res.json(data);
   });
 
-  // Secure customer add/update
-  app.post("/api/customers/upsert", async (req, res) => {
-    const customerData = req.body;
-    const { data, error } = await supabase
-      .from('customers')
-      .upsert(customerData)
-      .select()
-      .single();
-
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
-  });
-
 // Public booking data - vrací jen nezbytné info pro kalendář
 app.get("/api/public/booking-data", async (req, res) => {
   try {
