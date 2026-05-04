@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Reservation, Vehicle, Customer, Contract } from '../types';
-import { UserPlus, Car, Calendar as CalendarIcon, Signature, Edit, Search, X, Copy, CheckCircle, Mail, Link as LinkIcon } from 'lucide-react';
+import { UserPlus, Car, Calendar as CalendarIcon, Signature, Edit, Search, X, Copy, CheckCircle, Mail, Link as LinkIcon, RefreshCw } from 'lucide-react';
 import SignatureModal from '../components/SignatureModal';
 import { useData } from '../contexts/DataContext';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -199,17 +199,17 @@ const Reservations: React.FC = () => {
         setIsProcessing(true);
         try {
             let finalCustomerId = selectedCustomerId;
+            let customerForContract: Customer | undefined;
+
             if (isNewCustomer) {
                 const newCustomer = await actions.addCustomer(newCustomerData);
                 finalCustomerId = newCustomer.id;
+                customerForContract = { id: finalCustomerId, ...newCustomerData } as Customer;
+            } else {
+                customerForContract = customers.find(c => c.id === finalCustomerId);
             }
 
             if (!finalCustomerId) throw new Error("Nepodařilo se identifikovat zákazníka.");
-
-            const customerForContract = isNewCustomer 
-                ? { id: finalCustomerId, ...newCustomerData } as Customer
-                : customers.find(c => c.id === finalCustomerId);
-
             if (!customerForContract) throw new Error("Nepodařilo se nalézt data zákazníka.");
 
             if (isEditing && editingId) {
