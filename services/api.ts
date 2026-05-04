@@ -100,7 +100,7 @@ const fromReservation = (r: any): Reservation => r && ({
     startMileage: r.start_mileage,
     endMileage: r.end_mileage,
     destination: r.destination,
-    expectedMileage: r.expected_mileage,
+    expectedMileage: r.expected_mileage ? Number(r.expected_mileage) : undefined,
     notes: r.notes,
     portalToken: r.portal_token,
     // Nested objects are expanded in DataContext, but if they come from DB, map them too

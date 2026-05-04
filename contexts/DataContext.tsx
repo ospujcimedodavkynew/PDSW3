@@ -103,13 +103,20 @@ export const generateContractText = (
 ): string => {
     const { customer, vehicle, startDate, endDate, totalPrice, destination, expectedMileage } = templateData;
 
+    // Resilience: ensure valid data objects
+    const safeCustomer = customer || { firstName: 'Nájemce', lastName: '', address: '', email: '', phone: '', driverLicenseNumber: '' };
+    const safeVehicle = vehicle || { name: 'Vozidlo', make: '', model: '', licensePlate: '', year: 0, currentMileage: 0 };
+    const safeStartDate = startDate instanceof Date && !isNaN(startDate.getTime()) ? startDate : new Date();
+    const safeEndDate = endDate instanceof Date && !isNaN(endDate.getTime()) ? endDate : new Date();
+
     const signatureSection = signaturePlaceholder === 'image_placeholder'
         ? `Digitální podpis nájemce:\n%%SIGNATURE_IMAGE%%`
         : `Smlouva bude digitálně podepsána při převzetí vozidla.`;
-
-    const contractVehicle = vehicle;
-    const customerForContract = customer;
     
+    const safeTotalPrice = Number(totalPrice) || 0;
+    const safeExpectedMileage = expectedMileage ? Number(expectedMileage) : null;
+    const safeCurrentMileage = safeVehicle.currentMileage ? Number(safeVehicle.currentMileage) : 0;
+
     return `
 SMLOUVA O NÁJMU DOPRAVNÍHO PROSTŘEDKU
 =========================================
@@ -124,29 +131,29 @@ IČO: 07031653
 (dále jen "pronajímatel")
 
 Nájemce:
-Jméno: ${customerForContract.firstName} ${customerForContract.lastName}
-Adresa: ${customerForContract.address}
-${customerForContract.ico ? `IČO: ${customerForContract.ico}` : ''}
-Email: ${customerForContract.email}
-Telefon: ${customerForContract.phone}
-Číslo ŘP: ${customerForContract.driverLicenseNumber}
+Jméno: ${safeCustomer.firstName} ${safeCustomer.lastName}
+Adresa: ${safeCustomer.address}
+${safeCustomer.ico ? `IČO: ${safeCustomer.ico}` : ''}
+Email: ${safeCustomer.email}
+Telefon: ${safeCustomer.phone}
+Číslo ŘP: ${safeCustomer.driverLicenseNumber}
 (dále jen "nájemce")
 
 Článek II. - Předmět a účel nájmu
 -----------------------------------------
 1. Pronajímatel tímto přenechává nájemci do dočasného užívání (nájmu) následující motorové vozidlo (dále jen "předmět nájmu" nebo "vozidlo"):
-   Vozidlo: ${contractVehicle.name} (${contractVehicle.make} ${contractVehicle.model})
-   SPZ: ${contractVehicle.licensePlate}
-   Rok výroby: ${contractVehicle.year}
-${destination ? `   Cíl cesty: ${destination}\n` : ''}${expectedMileage ? `   Předpokládaný nájezd: ${expectedMileage.toLocaleString('cs-CZ')} km\n` : ''}
+   Vozidlo: ${safeVehicle.name} (${safeVehicle.make} ${safeVehicle.model})
+   SPZ: ${safeVehicle.licensePlate}
+   Rok výroby: ${safeVehicle.year}
+${destination ? `   Cíl cesty: ${destination}\n` : ''}${safeExpectedMileage !== null ? `   Předpokládaný nájezd: ${safeExpectedMileage.toLocaleString('cs-CZ')} km\n` : ''}
 2. Nájemce se zavazuje užívat vozidlo k obvyklému účelu a v souladu s platnými právními předpisy.
 
 Článek III. - Doba nájmu a cena
 -----------------------------------------
-1. Doba nájmu je sjednána od: ${startDate.toLocaleString('cs-CZ')} do: ${endDate.toLocaleString('cs-CZ')}.
-2. Celková cena nájmu činí: ${totalPrice.toLocaleString('cs-CZ')} Kč. Cena je splatná při převzetí vozidla, není-li dohodnuto jinak.
+1. Doba nájmu je sjednána od: ${safeStartDate.toLocaleString('cs-CZ')} do: ${safeEndDate.toLocaleString('cs-CZ')}.
+2. Celková cena nájmu činí: ${safeTotalPrice.toLocaleString('cs-CZ')} Kč. Cena je splatná při převzetí vozidla, není-li dohodnuto jinak.
 3. Nájemce bere na vědomí, že denní limit pro nájezd je 300 km. Za každý kilometr nad tento limit (vypočtený jako 300 km * počet dní pronájmu) bude účtován poplatek 3 Kč/km.
-   Počáteční stav kilometrů: ${(contractVehicle.currentMileage ?? 0).toLocaleString('cs-CZ')} km.
+   Počáteční stav kilometrů: ${safeCurrentMileage.toLocaleString('cs-CZ')} km.
 
 Článek IV. - Vratná kauce (jistota)
 -----------------------------------------
