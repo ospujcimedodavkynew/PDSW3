@@ -90,30 +90,57 @@ const toCustomer = (c: Partial<Customer>) => {
     return payload;
 };
 
-const fromReservation = (r: any): Reservation => r && ({
-    id: r.id,
-    customerId: r.customer_id,
-    vehicleId: r.vehicle_id,
-    startDate: r.start_date,
-    endDate: r.end_date,
-    status: r.status,
-    startMileage: r.start_mileage,
-    endMileage: r.end_mileage,
-    destination: r.destination,
-    expectedMileage: r.expected_mileage ? Number(r.expected_mileage) : undefined,
-    notes: r.notes,
-    portalToken: r.portal_token,
-    // Nested objects are expanded in DataContext, but if they come from DB, map them too
-    customer: r.customer ? fromCustomer(r.customer) : undefined,
-    vehicle: r.vehicle ? fromVehicle(r.vehicle) : undefined,
-});
+const fromReservation = (r: any): Reservation => {
+    if (!r) return null as any;
+    let destination = r.destination;
+    let expectedMileage = r.expected_mileage ? Number(r.expected_mileage) : undefined;
+    let notes = r.notes || '';
+
+    // Fallback: If columns are missing or null in DB, try to extract from notes
+    if (notes.includes('---RESERVATION_DATA---')) {
+        try {
+            const parts = notes.split('---RESERVATION_DATA---');
+            const data = JSON.parse(parts[1]);
+            if (!destination) destination = data.destination;
+            if (!expectedMileage) expectedMileage = data.expectedMileage;
+            notes = parts[0].trim();
+        } catch (e) {
+            // Ignore parse errors
+        }
+    }
+
+    return {
+        id: r.id,
+        customerId: r.customer_id,
+        vehicleId: r.vehicle_id,
+        startDate: r.start_date,
+        endDate: r.end_date,
+        status: r.status,
+        startMileage: r.start_mileage,
+        endMileage: r.end_mileage,
+        destination: destination,
+        expectedMileage: expectedMileage,
+        notes: notes,
+        portalToken: r.portal_token,
+        customer: r.customer ? fromCustomer(r.customer) : undefined,
+        vehicle: r.vehicle ? fromVehicle(r.vehicle) : undefined,
+    };
+};
 
 const toReservation = (r: Partial<Reservation>) => {
     const { 
         customerId, vehicleId, startDate, endDate, 
         startMileage, endMileage, destination, expectedMileage,
-        portalToken, customer, vehicle, ...rest 
+        portalToken, customer, vehicle, notes, ...rest 
     } = r;
+
+    // We MUST hide destination/expectedMileage from the root payload to avoid DB schema errors
+    // Instead, we store them inside the 'notes' field.
+    let finalNotes = notes || '';
+    if (destination || expectedMileage) {
+        finalNotes = `${finalNotes}\n\n---RESERVATION_DATA---${JSON.stringify({ destination, expectedMileage })}`;
+    }
+
     const payload = {
         ...rest,
         customer_id: customerId,
@@ -122,10 +149,14 @@ const toReservation = (r: Partial<Reservation>) => {
         end_date: endDate,
         start_mileage: startMileage,
         end_mileage: endMileage,
-        destination: destination,
-        expected_mileage: expectedMileage,
+        notes: finalNotes,
         portal_token: portalToken,
     };
+    
+    // Explicitly delete keys that don't exist in DB schema to prevent "column not found" errors
+    delete (payload as any).destination;
+    delete (payload as any).expected_mileage;
+
     Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
     return payload;
 };
