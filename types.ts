@@ -64,6 +64,8 @@ export interface Reservation {
     status: 'pending-customer' | 'pending-approval' | 'scheduled' | 'active' | 'completed';
     startMileage?: number;
     endMileage?: number;
+    destination?: string;
+    expectedMileage?: number;
     notes?: string;
     portalToken?: string;
     // Expanded properties for easy access in components

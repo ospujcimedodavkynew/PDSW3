@@ -9,10 +9,12 @@ import { generateContractText, calculateTotalPrice } from '../contexts/DataConte
 interface ReservationFormData {
     selectedCustomerId: string;
     isNewCustomer: boolean;
-    newCustomerData: Omit<Customer, 'id'>;
-    selectedVehicleId: string;
-    startDate: string;
-    endDate: string;
+    newCustomerData: Omit<Customer, 'id'>,
+    selectedVehicleId: string,
+    startDate: string,
+    endDate: string,
+    destination: string,
+    expectedMileage: string,
 }
 
 const DRAFT_KEY = 'reservationFormDraft';
@@ -24,6 +26,8 @@ const initialFormData: ReservationFormData = {
     selectedVehicleId: '',
     startDate: '',
     endDate: '',
+    destination: '',
+    expectedMileage: '',
 };
 
 const loadDraft = (): ReservationFormData => {
@@ -62,6 +66,8 @@ const Reservations: React.FC = () => {
                 selectedVehicleId: reservationToEdit.vehicleId,
                 startDate: formatForInput(reservationToEdit.startDate),
                 endDate: formatForInput(reservationToEdit.endDate),
+                destination: reservationToEdit.destination || '',
+                expectedMileage: reservationToEdit.expectedMileage ? String(reservationToEdit.expectedMileage) : '',
             });
             setIsEditing(true);
             setEditingId(reservationToEdit.id);
@@ -88,6 +94,7 @@ const Reservations: React.FC = () => {
     }, [formData, isEditing]);
     
     const [isProcessing, setIsProcessing] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
     const [signatureDataUrl, setSignatureDataUrl] = useState<string>('');
     const [customerSearchTerm, setCustomerSearchTerm] = useState('');
@@ -118,7 +125,7 @@ const Reservations: React.FC = () => {
             // When editing, exclude the reservation being edited from conflict checks
             if (isEditing && r.id === editingId) continue;
 
-            if (r.status === 'scheduled' || r.status === 'active') {
+            if (['scheduled', 'active', 'pending-approval', 'pending-customer'].includes(r.status)) {
                 const resStart = new Date(r.startDate);
                 const resEnd = new Date(r.endDate);
                 if (start < resEnd && end > resStart) {
@@ -174,17 +181,18 @@ const Reservations: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setSubmitError(null);
         
-        if (!isNewCustomer && !selectedCustomerId) { alert("Vyberte prosím zákazníka."); return; }
-        if (isNewCustomer && (!newCustomerData.firstName || !newCustomerData.lastName || !newCustomerData.email || !newCustomerData.address)) { alert("Vyplňte prosím údaje o novém zákazníkovi."); return; }
-        if (!selectedVehicleId) { alert("Vyberte prosím vozidlo."); return; }
-        if (!startDate || !endDate) { alert("Vyberte prosím období pronájmu."); return; }
-        if (new Date(endDate) <= new Date(startDate)) { alert("Datum konce musí být po datu začátku."); return; }
+        if (!isNewCustomer && !selectedCustomerId) { setSubmitError("Vyberte prosím zákazníka."); return; }
+        if (isNewCustomer && (!newCustomerData.firstName || !newCustomerData.lastName || !newCustomerData.email || !newCustomerData.address)) { setSubmitError("Vyplňte prosím údaje o novém zákazníkovi."); return; }
+        if (!selectedVehicleId) { setSubmitError("Vyberte prosím vozidlo."); return; }
+        if (!startDate || !endDate) { setSubmitError("Vyberte prosím období pronájmu."); return; }
+        if (new Date(endDate) <= new Date(startDate)) { setSubmitError("Datum konce musí být po datu začátku."); return; }
         
         const isVehicleAvailable = availableVehicles.some(v => v.id === selectedVehicleId);
         const originalVehicle = isEditing ? reservations.find(r => r.id === editingId)?.vehicleId : null;
         if (!isVehicleAvailable && selectedVehicleId !== originalVehicle) {
-            alert("Vybrané vozidlo není v tomto termínu dostupné. Zvolte prosím jiné vozidlo nebo termín.");
+            setSubmitError("Vybrané vozidlo není v tomto termínu dostupné. Zvolte prosím jiné vozidlo nebo termín.");
             return;
         }
 
@@ -196,41 +204,55 @@ const Reservations: React.FC = () => {
                 finalCustomerId = newCustomer.id;
             }
 
+            if (!finalCustomerId) throw new Error("Nepodařilo se identifikovat zákazníka.");
+
+            const customerForContract = isNewCustomer 
+                ? { id: finalCustomerId, ...newCustomerData } as Customer
+                : customers.find(c => c.id === finalCustomerId);
+
+            if (!customerForContract) throw new Error("Nepodařilo se nalézt data zákazníka.");
+
             if (isEditing && editingId) {
                 await actions.updateReservation(editingId, {
                     customerId: finalCustomerId,
                     vehicleId: selectedVehicleId,
-                    startDate: new Date(startDate),
-                    endDate: new Date(endDate),
-                    status: 'scheduled', // Update status from 'pending-approval'
+                    startDate: new Date(formData.startDate),
+                    endDate: new Date(formData.endDate),
+                    status: 'scheduled', 
+                    destination: formData.destination,
+                    expectedMileage: formData.expectedMileage ? Number(formData.expectedMileage) : undefined
                 });
-                alert('Rezervace byla úspěšně upravena a schválena.');
+                alert('Rezervace byla úspěšně upravena.');
                 resetForm();
-
             } else { // Creating a new reservation
-                if (!signatureDataUrl) { alert("Zákazník se musí podepsat."); setIsProcessing(false); return; }
+                if (!signatureDataUrl) { 
+                    setSubmitError("Zákazník se musí podepsat."); 
+                    setIsProcessing(false); 
+                    return; 
+                }
 
-                const customerForContract = isNewCustomer 
-                    ? { id: finalCustomerId, ...newCustomerData } as Customer
-                    : customers.find(c => c.id === finalCustomerId);
-
-                if (!customerForContract) throw new Error("Nepodařilo se nalézt data zákazníka.");
-                
                 const newReservation = await actions.addReservation({
                     customerId: finalCustomerId,
                     vehicleId: selectedVehicleId,
-                    startDate: new Date(startDate),
-                    endDate: new Date(endDate),
+                    startDate: new Date(formData.startDate),
+                    endDate: new Date(formData.endDate),
+                    destination: formData.destination,
+                    expectedMileage: formData.expectedMileage ? Number(formData.expectedMileage) : undefined
                 });
+
+                if (!newReservation || !newReservation.id) throw new Error("Rezervace nebyla vytvořena serverem.");
+
                 const contractVehicle = vehicles.find(v => v.id === selectedVehicleId);
                 if (!contractVehicle) throw new Error("Vozidlo nebylo nalezeno.");
 
                 const contractText = generateContractText({
                     customer: customerForContract,
                     vehicle: contractVehicle,
-                    startDate: new Date(startDate),
-                    endDate: new Date(endDate),
+                    startDate: new Date(formData.startDate),
+                    endDate: new Date(formData.endDate),
                     totalPrice: totalPrice,
+                    destination: formData.destination,
+                    expectedMileage: formData.expectedMileage ? Number(formData.expectedMileage) : undefined
                 }, 'image_placeholder');
                 
                 const newContract = await actions.addContract({
@@ -240,6 +262,8 @@ const Reservations: React.FC = () => {
                     generatedAt: new Date(),
                     contractText,
                 }, signatureDataUrl);
+
+                if (!newContract) throw new Error("Rezervace byla vytvořena, ale nepodařilo se vygenerovat smlouvu. Prosím zkontrolujte detail rezervace.");
 
                 setGeneratedContractInfo({ 
                     contractId: newContract.id, 
@@ -252,7 +276,7 @@ const Reservations: React.FC = () => {
 
         } catch (error) {
             console.error("Failed to process reservation:", error);
-            alert(`Chyba při zpracování rezervace: ${error instanceof Error ? error.message : "Neznámá chyba"}`);
+            setSubmitError(`Chyba při ukládání: ${error instanceof Error ? error.message : "Zkontrolujte internetové připojení a zkuste to znovu."}`);
         } finally {
             setIsProcessing(false);
         }
@@ -291,6 +315,19 @@ const Reservations: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-8">
             <h1 className="text-3xl font-bold text-gray-800">{isEditing ? 'Upravit rezervaci' : 'Nová rezervace'}</h1>
+            
+            {submitError && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded shadow-sm animate-pulse">
+                    <div className="flex">
+                        <div className="flex-shrink-0">
+                            <X className="h-5 w-5 text-red-500" />
+                        </div>
+                        <div className="ml-3">
+                            <p className="text-sm text-red-700 font-medium">Chyba při ukládání: {submitError}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-6 bg-white p-6 rounded-lg shadow-md">
@@ -344,15 +381,25 @@ const Reservations: React.FC = () => {
                     
                     {/* Date & Time Section */}
                     <section>
-                        <h2 className="text-xl font-semibold text-gray-700 flex items-center mb-4"><CalendarIcon className="mr-2"/>2. Doba pronájmu</h2>
+                        <h2 className="text-xl font-semibold text-gray-700 flex items-center mb-4"><CalendarIcon className="mr-2"/>2. Doba pronájmu a cíl</h2>
                         <div className="grid grid-cols-2 gap-4 mb-3">
                             <div>
                                 <label className="block text-sm font-medium">Od (datum a čas)</label>
-                                <input type="datetime-local" value={startDate} onChange={e => setFormData(prev => ({...prev, startDate: e.target.value}))} className="w-full p-2 border rounded" required />
+                                <input type="datetime-local" value={formData.startDate} onChange={e => setFormData(prev => ({...prev, startDate: e.target.value}))} className="w-full p-2 border rounded" required />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium">Do (datum a čas)</label>
-                                <input type="datetime-local" value={endDate} onChange={e => setFormData(prev => ({...prev, endDate: e.target.value}))} className="w-full p-2 border rounded" required />
+                                <input type="datetime-local" value={formData.endDate} onChange={e => setFormData(prev => ({...prev, endDate: e.target.value}))} className="w-full p-2 border rounded" required />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 mb-3">
+                            <div>
+                                <label className="block text-sm font-medium">Cíl cesty</label>
+                                <input type="text" value={formData.destination} onChange={e => setFormData(prev => ({...prev, destination: e.target.value}))} className="w-full p-2 border rounded" placeholder="Např. Brno -> Praha" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium">Předpokládaný nájezd (km)</label>
+                                <input type="number" value={formData.expectedMileage} onChange={e => setFormData(prev => ({...prev, expectedMileage: e.target.value}))} className="w-full p-2 border rounded" placeholder="Např. 500" />
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -458,8 +505,22 @@ const Reservations: React.FC = () => {
                                 </p>
                             </div>
                         </div>
-                         <button type="submit" className="w-full mt-6 bg-secondary text-dark-text font-bold py-3 rounded-lg hover:bg-secondary-hover transition-colors text-lg" disabled={isProcessing}>
-                            {isProcessing ? 'Zpracovávám...' : (isEditing ? 'Uložit změny' : 'Vytvořit rezervaci a smlouvu')}
+                         <button 
+                            type="submit" 
+                            className={`w-full mt-6 font-bold py-3 rounded-lg transition-all text-lg flex items-center justify-center shadow-md ${isProcessing ? 'bg-gray-400 cursor-not-allowed text-gray-200' : 'bg-secondary text-dark-text hover:bg-secondary-hover hover:shadow-lg'}`} 
+                            disabled={isProcessing}
+                        >
+                            {isProcessing ? (
+                                <>
+                                    <RefreshCw className="animate-spin mr-2 w-5 h-5" />
+                                    Ukládám...
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle className="mr-2 w-5 h-5" />
+                                    {isEditing ? 'Uložit změny' : 'Vytvořit rezervaci a smlouvu'}
+                                </>
+                            )}
                         </button>
                     </div>
                 </div>

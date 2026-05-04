@@ -107,6 +107,8 @@ const ApprovalModal: React.FC<ApprovalModalProps> = ({ isOpen, onClose, reservat
                                             <div>
                                                 <p className="font-semibold">Od: {new Date(res.startDate).toLocaleString('cs-CZ')}</p>
                                                 <p className="font-semibold">Do: {new Date(res.endDate).toLocaleString('cs-CZ')}</p>
+                                                {res.destination && <p className="text-gray-600 mt-1"><strong>Cíl:</strong> {res.destination}</p>}
+                                                {res.expectedMileage && <p className="text-gray-600"><strong>Nájezd:</strong> {res.expectedMileage} km</p>}
                                             </div>
                                         </div>
                                     </div>

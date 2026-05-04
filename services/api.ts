@@ -99,6 +99,8 @@ const fromReservation = (r: any): Reservation => r && ({
     status: r.status,
     startMileage: r.start_mileage,
     endMileage: r.end_mileage,
+    destination: r.destination,
+    expectedMileage: r.expected_mileage,
     notes: r.notes,
     portalToken: r.portal_token,
     // Nested objects are expanded in DataContext, but if they come from DB, map them too
@@ -107,7 +109,11 @@ const fromReservation = (r: any): Reservation => r && ({
 });
 
 const toReservation = (r: Partial<Reservation>) => {
-    const { customerId, vehicleId, startDate, endDate, startMileage, endMileage, portalToken, customer, vehicle, ...rest } = r;
+    const { 
+        customerId, vehicleId, startDate, endDate, 
+        startMileage, endMileage, destination, expectedMileage,
+        portalToken, customer, vehicle, ...rest 
+    } = r;
     const payload = {
         ...rest,
         customer_id: customerId,
@@ -116,6 +122,8 @@ const toReservation = (r: Partial<Reservation>) => {
         end_date: endDate,
         start_mileage: startMileage,
         end_mileage: endMileage,
+        destination: destination,
+        expected_mileage: expectedMileage,
         portal_token: portalToken,
     };
     Object.keys(payload).forEach(key => (payload as any)[key] === undefined && delete (payload as any)[key]);
@@ -567,14 +575,22 @@ export const submitCustomerDetails = async (token: string, customerData: Omit<Cu
     await updateReservation(foundReservation.id, { customerId: newCustomer.id, status: 'pending-approval' });
 };
 
-export const createOnlineReservation = async (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>): Promise<Reservation> => {
+export const createOnlineReservation = async (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>, destination?: string, expectedMileage?: number): Promise<Reservation> => {
     // REFACTOR: Centralize the customer upsert logic by calling `addCustomer`,
     // which already handles checking for an existing customer and updating or creating them.
     // This removes duplicate code and ensures consistent behavior.
     const customer = await addCustomer(customerData);
 
     // Create the reservation with the correct customer ID and 'pending-approval' status.
-    const reservationData: Partial<Reservation> = { customerId: customer.id, vehicleId, startDate, endDate, status: 'pending-approval' };
+    const reservationData: Partial<Reservation> = { 
+        customerId: customer.id, 
+        vehicleId, 
+        startDate, 
+        endDate, 
+        status: 'pending-approval',
+        destination,
+        expectedMileage
+    };
     
     const data = await callApi('/reservations', {
         method: 'POST',

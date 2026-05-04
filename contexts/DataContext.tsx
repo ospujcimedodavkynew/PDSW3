@@ -45,7 +45,7 @@ interface DataContextActions {
     addService: (serviceData: Omit<VehicleService, 'id'>) => Promise<void>;
     updateService: (serviceId: string, updates: Partial<VehicleService>) => Promise<void>;
     addDamage: (damageData: { vehicleId: string; reservationId: string; description: string; location: string; imageFile: File; }) => Promise<void>;
-    createOnlineReservation: (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>) => Promise<void>;
+    createOnlineReservation: (vehicleId: string, startDate: Date, endDate: Date, customerData: Omit<Customer, 'id'>, destination?: string, expectedMileage?: number) => Promise<void>;
     updateSettings: (settingsData: Omit<CompanySettings, 'id'>) => Promise<void>;
     addInvoice: (invoiceData: Omit<Invoice, 'id'>) => Promise<Invoice>;
     setReservationToEdit: (reservation: Reservation | null) => void;
@@ -93,13 +93,15 @@ interface ContractTemplateData {
     startDate: Date;
     endDate: Date;
     totalPrice: number;
+    destination?: string;
+    expectedMileage?: number;
 }
 
 export const generateContractText = (
     templateData: ContractTemplateData,
     signaturePlaceholder: 'image_placeholder' | 'text_placeholder'
 ): string => {
-    const { customer, vehicle, startDate, endDate, totalPrice } = templateData;
+    const { customer, vehicle, startDate, endDate, totalPrice, destination, expectedMileage } = templateData;
 
     const signatureSection = signaturePlaceholder === 'image_placeholder'
         ? `Digitální podpis nájemce:\n%%SIGNATURE_IMAGE%%`
@@ -136,6 +138,7 @@ Telefon: ${customerForContract.phone}
    Vozidlo: ${contractVehicle.name} (${contractVehicle.make} ${contractVehicle.model})
    SPZ: ${contractVehicle.licensePlate}
    Rok výroby: ${contractVehicle.year}
+${destination ? `   Cíl cesty: ${destination}\n` : ''}${expectedMileage ? `   Předpokládaný nájezd: ${expectedMileage.toLocaleString('cs-CZ')} km\n` : ''}
 2. Nájemce se zavazuje užívat vozidlo k obvyklému účelu a v souladu s platnými právními předpisy.
 
 Článek III. - Doba nájmu a cena
@@ -363,6 +366,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 startDate: new Date(reservation.startDate),
                 endDate: new Date(reservation.endDate),
                 totalPrice: totalPrice,
+                destination: reservation.destination,
+                expectedMileage: reservation.expectedMileage,
             }, 'text_placeholder');
 
             const contract = await api.addContract({
@@ -528,8 +533,8 @@ ${signatureImgTag}
             await api.addDamage(damageData);
             await refreshData();
         },
-        createOnlineReservation: async (vehicleId, startDate, endDate, customerData) => {
-            await api.createOnlineReservation(vehicleId, startDate, endDate, customerData);
+        createOnlineReservation: async (vehicleId, startDate, endDate, customerData, destination, expectedMileage) => {
+            await api.createOnlineReservation(vehicleId, startDate, endDate, customerData, destination, expectedMileage);
             await refreshData();
         },
         updateSettings: async (settingsData) => {

@@ -42,6 +42,8 @@ const OnlineBooking: React.FC = () => {
     const [customerData, setCustomerData] = useState<Omit<Customer, 'id'>>({
         firstName: '', lastName: '', email: '', phone: '', driverLicenseNumber: '', address: '', ico: ''
     });
+    const [destination, setDestination] = useState('');
+    const [expectedMileage, setExpectedMileage] = useState('');
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string>('');
@@ -104,22 +106,23 @@ const OnlineBooking: React.FC = () => {
                     return displayVehicle;
                 }
 
-                const conflictingReservation = allReservations.find(r =>
+                const overlappingReservation = allReservations.find(r =>
                     r.vehicleId === vehicle.id &&
-                    (r.status === 'scheduled' || r.status === 'active') &&
-                    (new Date(r.endDate) > desiredStart) // Only consider reservations that are not yet finished
+                    ['scheduled', 'active', 'pending-approval', 'pending-customer'].includes(r.status) &&
+                    (startDateObj < new Date(r.endDate) && endDateObj > new Date(r.startDate))
                 );
 
-                if (!conflictingReservation) {
+                if (!overlappingReservation) {
                     displayVehicle.availabilityStatus = VehicleAvailabilityStatus.AVAILABLE_NOW;
                     return displayVehicle;
                 }
 
-                // Check if the reservation is on the same day
-                const resEndDate = new Date(conflictingReservation.endDate);
+                // If there's an overlap, check if it's "available later" on the same day (only if desired start is after the end of the conflict)
+                const resEndDate = new Date(overlappingReservation.endDate);
                 if (resEndDate.getFullYear() === desiredStart.getFullYear() &&
                     resEndDate.getMonth() === desiredStart.getMonth() &&
-                    resEndDate.getDate() === desiredStart.getDate())
+                    resEndDate.getDate() === desiredStart.getDate() &&
+                    desiredStart >= resEndDate) // Only if we start after it ends
                 {
                     const availableFrom = new Date(resEndDate.getTime() + PREPARATION_BUFFER_MINUTES * 60000);
                     displayVehicle.availableFrom = availableFrom;
@@ -183,7 +186,14 @@ const OnlineBooking: React.FC = () => {
         }
         setIsProcessing(true);
         try {
-            await actions.createOnlineReservation(selectedVehicleId, startDateObj, endDateObj, customerData);
+            await actions.createOnlineReservation(
+                selectedVehicleId, 
+                startDateObj, 
+                endDateObj, 
+                customerData,
+                destination,
+                expectedMileage ? Number(expectedMileage) : undefined
+            );
             setIsSubmitted(true);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Rezervaci se nepodařilo vytvořit.');
@@ -333,6 +343,10 @@ const OnlineBooking: React.FC = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                     <input type="text" placeholder="Číslo řidičského průkazu" value={customerData.driverLicenseNumber} onChange={e => setCustomerData({...customerData, driverLicenseNumber: e.target.value})} className="w-full p-3 border rounded-md" required={!!selectedVehicleId} />
                                     <input type="text" placeholder="IČO (volitelné)" value={customerData.ico || ''} onChange={e => setCustomerData({...customerData, ico: e.target.value})} className="w-full p-3 border rounded-md" />
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                     <input type="text" placeholder="Cíl cesty (stát / město)" value={destination} onChange={e => setDestination(e.target.value)} className="w-full p-3 border rounded-md" required={!!selectedVehicleId} />
+                                     <input type="number" placeholder="Předpokládaný nájezd km" value={expectedMileage} onChange={e => setExpectedMileage(e.target.value)} className="w-full p-3 border rounded-md" required={!!selectedVehicleId} />
                                 </div>
                             </section>
                         </div>
