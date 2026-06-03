@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Reservation, Vehicle, Page, VehicleService } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { Car, Users, CalendarCheck, AlertTriangle, Link, ArrowRightLeft, Wrench, Phone, ArrowUpCircle, ArrowDownCircle, Bell, CalendarClock, Settings, ShieldCheck, Ticket, CreditCard, Zap } from 'lucide-react';
+import { Car, Users, CalendarCheck, AlertTriangle, Link, ArrowRightLeft, Wrench, Phone, ArrowUpCircle, ArrowDownCircle, Bell, BellOff, CalendarClock, Settings, ShieldCheck, Ticket, CreditCard, Zap, Volume2, VolumeX } from 'lucide-react';
 import ReservationDetailModal from '../components/ReservationDetailModal';
 import SelfServiceModal from '../components/SelfServiceModal';
 import ApprovalModal from '../components/ApprovalModal';
@@ -158,7 +158,7 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
         [reservations]
     );
 
-    const { availableToday, availableTomorrow } = useMemo(() => {
+    const { availableToday, availableTomorrow, availableFriday, availableSaturday, fridayDate, saturdayDate } = useMemo(() => {
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
         const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
@@ -168,37 +168,48 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
         const tomorrowEnd = new Date(tomorrowStart);
         tomorrowEnd.setHours(23, 59, 59, 999);
 
+        // Find upcoming Friday and Saturday
+        const findNextDay = (dayIndex: number) => {
+            const date = new Date(todayStart);
+            const currentDay = date.getDay(); // 0 is Sunday, 1 is Monday... 5 is Friday, 6 is Saturday
+            let diff = dayIndex - currentDay;
+            if (diff < 0) diff += 7; // If it's already past (e.g. today is Sat, looking for Fri), go to next week
+            date.setDate(date.getDate() + diff);
+            return date;
+        };
+
+        const fridayStart = findNextDay(5);
+        const fridayEnd = new Date(fridayStart); fridayEnd.setHours(23, 59, 59, 999);
+        
+        const saturdayStart = findNextDay(6);
+        const saturdayEnd = new Date(saturdayStart); saturdayEnd.setHours(23, 59, 59, 999);
+
         // Include all active or scheduled for overlap checks
         const activeAndScheduled = reservations.filter(r => r.status === 'active' || r.status === 'scheduled');
         
         const todayVehicles: { vehicle: Vehicle, note?: string }[] = [];
         const tomorrowVehicles: { vehicle: Vehicle, note?: string }[] = [];
+        const fridayVehicles: { vehicle: Vehicle, note?: string }[] = [];
+        const saturdayVehicles: { vehicle: Vehicle, note?: string }[] = [];
 
         vehicles.forEach(v => {
             if (v.status === 'maintenance') return;
 
             // Check for Today
-            // A vehicle is available today if it's NOT rented currently, 
-            // OR if it returns earlier today AND doesn't have another reservation starting too soon.
             const todayBookings = activeAndScheduled.filter(r => r.vehicleId === v.id && (new Date(r.startDate) < todayEnd && new Date(r.endDate) > todayStart));
-            
             const currentlyRented = activeAndScheduled.find(r => r.vehicleId === v.id && r.status === 'active');
             
             if (!currentlyRented) {
-                // If not rented, check if it has a booking starting SOON (within next 2 hours or already started)
                 const nextBooking = todayBookings.find(r => new Date(r.startDate) > now || (new Date(r.startDate) <= now && new Date(r.endDate) > now));
                 if (!nextBooking) {
                     todayVehicles.push({ vehicle: v });
                 } else if (new Date(nextBooking.startDate) > now) {
-                    // Available only until...
                     const until = new Date(nextBooking.startDate);
                     todayVehicles.push({ vehicle: v, note: `(do ${until.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })})` });
                 }
             } else {
-                // Currently rented, is it returning today?
                 const returnTime = new Date(currentlyRented.endDate);
                 if (returnTime >= todayStart && returnTime <= todayEnd) {
-                    // Returns today. Check if there's another booking right after it.
                     const hasConflictLater = todayBookings.some(r => r.id !== currentlyRented.id && new Date(r.startDate) < new Date(returnTime.getTime() + 60*60000));
                     if (!hasConflictLater) {
                         todayVehicles.push({ vehicle: v, note: `(od ${returnTime.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })})` });
@@ -212,11 +223,32 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                 const resEnd = new Date(r.endDate);
                 return r.vehicleId === v.id && resStart < tomorrowEnd && resEnd > tomorrowStart;
             });
-            if (!tomorrowBooking) {
-                tomorrowVehicles.push({ vehicle: v });
-            }
+            if (!tomorrowBooking) tomorrowVehicles.push({ vehicle: v });
+
+            // Check for Friday
+            const fridayBooking = activeAndScheduled.some(r => {
+                const resStart = new Date(r.startDate);
+                const resEnd = new Date(r.endDate);
+                return r.vehicleId === v.id && resStart < fridayEnd && resEnd > fridayStart;
+            });
+            if (!fridayBooking) fridayVehicles.push({ vehicle: v });
+
+            // Check for Saturday
+            const saturdayBooking = activeAndScheduled.some(r => {
+                const resStart = new Date(r.startDate);
+                const resEnd = new Date(r.endDate);
+                return r.vehicleId === v.id && resStart < saturdayEnd && resEnd > saturdayStart;
+            });
+            if (!saturdayBooking) saturdayVehicles.push({ vehicle: v });
         });
-        return { availableToday: todayVehicles, availableTomorrow: tomorrowVehicles };
+        return { 
+            availableToday: todayVehicles, 
+            availableTomorrow: tomorrowVehicles,
+            availableFriday: fridayVehicles,
+            availableSaturday: saturdayVehicles,
+            fridayDate: fridayStart,
+            saturdayDate: saturdayStart
+        };
 
     }, [vehicles, reservations]);
 
@@ -312,7 +344,17 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
             <SelfServiceModal isOpen={isSelfServiceModalOpen} onClose={() => setIsSelfServiceModalOpen(false)} availableVehicles={vehicles.filter(v => v.status === 'available')} onLinkGenerated={onSelfServiceLinkGenerated} />
 
             <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold text-gray-800">Přehled</h1>
+                <div className="flex items-center space-x-4">
+                    <h1 className="text-3xl font-bold text-gray-800">Přehled</h1>
+                    <button 
+                        onClick={() => actions.enableNotifications()} 
+                        className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm ${actions.notificationsEnabled ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-500 border border-gray-200 animate-pulse hover:bg-gray-200'}`}
+                        title={actions.notificationsEnabled ? "Zvuková upozornění jsou zapnutá" : "Klikněte pro zapnutí zvukových upozornění"}
+                    >
+                        {actions.notificationsEnabled ? <Volume2 className="w-3.5 h-3.5 mr-1.5" /> : <VolumeX className="w-3.5 h-3.5 mr-1.5" />}
+                        {actions.notificationsEnabled ? "ZVUKY ZAPNUTY" : "ZAPNOUT ZVUKY"}
+                    </button>
+                </div>
                 <div className="flex space-x-3">
                      <button onClick={() => setIsSelfServiceModalOpen(true)} className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center"><Link className="w-5 h-5 mr-2" /> Vytvořit samoobslužnou rezervaci</button>
                     <button onClick={() => setCurrentPage(Page.CUSTOMERS)} className="bg-gray-200 text-dark-text font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors flex items-center"><Users className="w-5 h-5 mr-2" /> Nový zákazník</button>
@@ -331,26 +373,53 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                 <div className="bg-white p-6 rounded-lg shadow-md">
                      <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center"><Zap className="mr-2 text-green-500"/>Rychlá dostupnost</h2>
                      <div className="space-y-4">
-                        <div>
-                            <h3 className="font-semibold mb-2">Volné dnes</h3>
-                            <div className="flex flex-wrap gap-2">
-                                {availableToday.length > 0 ? availableToday.map(({vehicle, note}) => (
-                                    <button key={vehicle.id} onClick={() => handleQuickBook(vehicle.id, new Date())} className="p-2 bg-gray-100 rounded-md hover:bg-blue-100 hover:shadow transition-all text-sm">
-                                        <p className="font-semibold">{vehicle.name}</p>
-                                        <p className="text-xs text-gray-600">{vehicle.licensePlate} <span className="text-green-600 font-bold">{note}</span></p>
-                                    </button>
-                                )) : <p className="text-sm text-gray-500 p-2">Žádná vozidla.</p>}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <h3 className="font-semibold mb-2 text-sm text-gray-600">Volné dnes</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {availableToday.length > 0 ? availableToday.map(({vehicle, note}) => (
+                                        <button key={vehicle.id} onClick={() => handleQuickBook(vehicle.id, new Date())} className="p-2 bg-gray-50 rounded-md border border-gray-100 hover:bg-blue-50 hover:border-blue-200 transition-all text-xs w-full text-left">
+                                            <p className="font-bold">{vehicle.name}</p>
+                                            <p className="text-gray-500">{vehicle.licensePlate} <span className="text-green-600 font-bold">{note}</span></p>
+                                        </button>
+                                    )) : <p className="text-xs text-gray-500 italic">Žádná vozidla.</p>}
+                                </div>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold mb-2 text-sm text-gray-600">Volné zítra</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {availableTomorrow.length > 0 ? availableTomorrow.map(({vehicle, note}) => (
+                                        <button key={vehicle.id} onClick={() => { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); handleQuickBook(vehicle.id, tomorrow); }} className="p-2 bg-gray-50 rounded-md border border-gray-100 hover:bg-blue-50 hover:border-blue-200 transition-all text-xs w-full text-left">
+                                            <p className="font-bold">{vehicle.name}</p>
+                                            <p className="text-gray-500">{vehicle.licensePlate} <span className="text-green-600 font-bold">{note}</span></p>
+                                        </button>
+                                    )) : <p className="text-xs text-gray-500 italic">Žádná vozidla.</p>}
+                                </div>
                             </div>
                         </div>
-                         <div>
-                            <h3 className="font-semibold mb-2">Volné zítra</h3>
-                            <div className="flex flex-wrap gap-2">
-                                {availableTomorrow.length > 0 ? availableTomorrow.map(({vehicle, note}) => (
-                                    <button key={vehicle.id} onClick={() => { const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); handleQuickBook(vehicle.id, tomorrow); }} className="p-2 bg-gray-100 rounded-md hover:bg-blue-100 hover:shadow transition-all text-sm">
-                                        <p className="font-semibold">{vehicle.name}</p>
-                                        <p className="text-xs text-gray-600">{vehicle.licensePlate} <span className="text-green-600 font-bold">{note}</span></p>
-                                    </button>
-                                )) : <p className="text-sm text-gray-500 p-2">Žádná vozidla.</p>}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-gray-100">
+                            <div>
+                                <h3 className="font-semibold mb-2 text-sm text-gray-600">Pátek ({fridayDate.toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' })})</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {availableFriday.length > 0 ? availableFriday.map(({vehicle}) => (
+                                        <button key={vehicle.id} onClick={() => handleQuickBook(vehicle.id, fridayDate)} className="p-2 bg-gray-50 rounded-md border border-gray-100 hover:bg-blue-50 hover:border-blue-200 transition-all text-xs w-full text-left">
+                                            <p className="font-bold">{vehicle.name}</p>
+                                            <p className="text-gray-500">{vehicle.licensePlate}</p>
+                                        </button>
+                                    )) : <p className="text-xs text-gray-500 italic">Plno.</p>}
+                                </div>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold mb-2 text-sm text-gray-600">Sobota ({saturdayDate.toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' })})</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {availableSaturday.length > 0 ? availableSaturday.map(({vehicle}) => (
+                                        <button key={vehicle.id} onClick={() => handleQuickBook(vehicle.id, saturdayDate)} className="p-2 bg-gray-50 rounded-md border border-gray-100 hover:bg-blue-50 hover:border-blue-200 transition-all text-xs w-full text-left">
+                                            <p className="font-bold">{vehicle.name}</p>
+                                            <p className="text-gray-500">{vehicle.licensePlate}</p>
+                                        </button>
+                                    )) : <p className="text-xs text-gray-500 italic">Plno.</p>}
+                                </div>
                             </div>
                         </div>
                      </div>

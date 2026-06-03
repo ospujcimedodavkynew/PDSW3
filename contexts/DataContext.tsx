@@ -50,6 +50,8 @@ interface DataContextActions {
     addInvoice: (invoiceData: Omit<Invoice, 'id'>) => Promise<Invoice>;
     setReservationToEdit: (reservation: Reservation | null) => void;
     setReservationDefaults: (defaults: ReservationDefaults | null) => void;
+    enableNotifications: () => void;
+    notificationsEnabled: boolean;
 }
 
 interface DataContextState {
@@ -258,16 +260,45 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [vehicleBeingEdited, setVehicleBeingEdited] = useState<Partial<Vehicle> | null>(null);
     const [reservationToEdit, setReservationToEdit] = useState<Reservation | null>(null);
     const [reservationDefaults, setReservationDefaults] = useState<ReservationDefaults | null>(null);
+    const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+        return localStorage.getItem('notifications_enabled') === 'true';
+    });
+    const [lastKnownReservationIds, setLastKnownReservationIds] = useState<Set<string>>(new Set());
+
+    const playNotificationSound = useCallback(() => {
+        if (!notificationsEnabled) return;
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.play().catch(err => {
+            console.error("Could not play notification sound (browser might be blocking audio):", err);
+        });
+    }, [notificationsEnabled]);
 
     const refreshData = useCallback(async () => {
         try {
             const allData = await api.getAllData();
             const expanded = expandData(allData);
+            
+            // Check for new online reservations
+            if (lastKnownReservationIds.size > 0) {
+                const currentIds = new Set(expanded.reservations.map(r => r.id));
+                const newPendingReservations = expanded.reservations.filter(
+                    r => !lastKnownReservationIds.has(r.id) && (r.status === 'pending-approval' || r.status === 'pending-customer')
+                );
+                
+                if (newPendingReservations.length > 0) {
+                    console.log("New online reservation detected! Playing sound...");
+                    playNotificationSound();
+                }
+                setLastKnownReservationIds(currentIds);
+            } else {
+                setLastKnownReservationIds(new Set(expanded.reservations.map(r => r.id)));
+            }
+            
             setData(expanded);
         } catch (error) {
             console.error("Failed to refresh data:", error);
         }
-    }, []);
+    }, [lastKnownReservationIds, playNotificationSound]);
 
     useEffect(() => {
         let channel: RealtimeChannel | null = null;
@@ -559,7 +590,20 @@ ${signatureImgTag}
         setReservationDefaults: (defaults) => {
             setReservationDefaults(defaults);
         },
-    }), [data.reservations, data.contracts, refreshData]);
+        enableNotifications: () => {
+            const newState = !notificationsEnabled;
+            setNotificationsEnabled(newState);
+            localStorage.setItem('notifications_enabled', newState.toString());
+            
+            if (newState) {
+                // Play a brief sound to "unlock" audio context in browser
+                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                audio.volume = 0.2;
+                audio.play().catch(() => {});
+            }
+        },
+        notificationsEnabled,
+    }), [data.reservations, data.contracts, refreshData, notificationsEnabled]);
 
     const value = useMemo(() => ({
         data,
