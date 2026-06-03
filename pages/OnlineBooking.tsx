@@ -99,39 +99,45 @@ const OnlineBooking: React.FC = () => {
             const categorizedVehicles = allVehicles.map(vehicle => {
                 const displayVehicle: DisplayVehicle = {
                     ...vehicle,
-                    availabilityStatus: VehicleAvailabilityStatus.UNAVAILABLE,
+                    availabilityStatus: VehicleAvailabilityStatus.AVAILABLE_NOW,
                 };
 
                 if (vehicle.status === 'maintenance') {
+                    displayVehicle.availabilityStatus = VehicleAvailabilityStatus.UNAVAILABLE;
                     return displayVehicle;
                 }
 
-                const overlappingReservation = allReservations.find(r =>
+                // 1. Find all active/related reservations for this vehicle
+                const vehicleReservations = allReservations.filter(r =>
                     r.vehicleId === vehicle.id &&
-                    ['scheduled', 'active', 'pending-approval', 'pending-customer'].includes(r.status) &&
-                    (startDateObj < new Date(r.endDate) && endDateObj > new Date(r.startDate))
+                    ['scheduled', 'active', 'pending-approval', 'pending-customer'].includes(r.status)
                 );
 
-                if (!overlappingReservation) {
-                    displayVehicle.availabilityStatus = VehicleAvailabilityStatus.AVAILABLE_NOW;
+                // 2. Check for direct overlap with requested period
+                const overlappingReservation = vehicleReservations.find(r => {
+                    const resStart = new Date(r.startDate);
+                    const resEnd = new Date(r.endDate);
+                    return (startDateObj < resEnd && endDateObj > resStart);
+                });
+
+                if (overlappingReservation) {
+                    displayVehicle.availabilityStatus = VehicleAvailabilityStatus.UNAVAILABLE;
                     return displayVehicle;
                 }
 
-                // If there's an overlap, check if it's "available later" on the same day (only if desired start is after the end of the conflict)
-                const resEndDate = new Date(overlappingReservation.endDate);
-                if (resEndDate.getFullYear() === desiredStart.getFullYear() &&
-                    resEndDate.getMonth() === desiredStart.getMonth() &&
-                    resEndDate.getDate() === desiredStart.getDate() &&
-                    desiredStart >= resEndDate) // Only if we start after it ends
-                {
-                    const availableFrom = new Date(resEndDate.getTime() + PREPARATION_BUFFER_MINUTES * 60000);
-                    displayVehicle.availableFrom = availableFrom;
+                // 3. Check for buffer conflict (reservation ending just before desired start)
+                const bufferInMs = PREPARATION_BUFFER_MINUTES * 60000;
+                const conflictWithBuffer = vehicleReservations.find(r => {
+                    const resEnd = new Date(r.endDate);
+                    // If reservation ends after (desiredStart - buffer) but before desiredStart
+                    return (resEnd > new Date(desiredStart.getTime() - bufferInMs) && resEnd <= desiredStart);
+                });
 
-                    if (desiredStart >= availableFrom) {
-                        displayVehicle.availabilityStatus = VehicleAvailabilityStatus.AVAILABLE_NOW;
-                    } else {
-                        displayVehicle.availabilityStatus = VehicleAvailabilityStatus.AVAILABLE_LATER;
-                    }
+                if (conflictWithBuffer) {
+                    const resEnd = new Date(conflictWithBuffer.endDate);
+                    const availableFrom = new Date(resEnd.getTime() + bufferInMs);
+                    displayVehicle.availableFrom = availableFrom;
+                    displayVehicle.availabilityStatus = VehicleAvailabilityStatus.AVAILABLE_LATER;
                 }
 
                 return displayVehicle;

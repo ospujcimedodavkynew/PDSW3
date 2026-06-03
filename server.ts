@@ -217,6 +217,13 @@ app.post("/api/:table/upsert", async (req, res) => {
 // Generic Insert
 app.post("/api/:table", async (req, res) => {
   const { table } = req.params;
+  
+  // Strip columns that don't exist in reservations table
+  if (table === 'reservations') {
+    delete req.body.expected_mileage;
+    delete req.body.expectedMileage;
+    delete req.body.destination;
+  }
 
   // Zabezpečení: Pouze tabulka 'reservations' může být vytvořena veřejně
   if (table !== 'reservations') {
@@ -240,6 +247,13 @@ app.post("/api/:table", async (req, res) => {
 // Generic Update
 app.patch("/api/:table/:id", async (req, res) => {
   const { table, id } = req.params;
+
+  // Strip columns that don't exist in reservations table
+  if (table === 'reservations') {
+    delete req.body.expected_mileage;
+    delete req.body.expectedMileage;
+    delete req.body.destination;
+  }
 
   // Zabezpečení: Pouze tabulka 'reservations' může být aktualizována veřejně (pro dokončení údajů zákazníkem)
   if (table !== 'reservations') {

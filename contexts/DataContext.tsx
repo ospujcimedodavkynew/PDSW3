@@ -104,7 +104,7 @@ export const generateContractText = (
     const { customer, vehicle, startDate, endDate, totalPrice, destination, expectedMileage } = templateData;
 
     // Resilience: ensure valid data objects
-    const safeCustomer = customer || { firstName: 'Nájemce', lastName: '', address: '', email: '', phone: '', driverLicenseNumber: '' };
+    const safeCustomer = customer || { firstName: 'Nájemce', lastName: '', address: '', email: '', phone: '', driverLicenseNumber: '', ico: '' };
     const safeVehicle = vehicle || { name: 'Vozidlo', make: '', model: '', licensePlate: '', year: 0, currentMileage: 0 };
     const safeStartDate = startDate instanceof Date && !isNaN(startDate.getTime()) ? startDate : new Date();
     const safeEndDate = endDate instanceof Date && !isNaN(endDate.getTime()) ? endDate : new Date();
