@@ -78,6 +78,10 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
         const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        
+        // Limit to today and yesterday to avoid clutter from months-old forgotten records
+        const limitStart = new Date(startOfDay);
+        limitStart.setDate(limitStart.getDate() - 1);
 
         return reservations
             .map(r => {
@@ -99,14 +103,15 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                     return null;
                 }
                 
-                // Show if it happens today OR if it's in the past (overdue)
-                if (date <= endOfDay) {
-                    return { ...r, type, time: date };
+                // Show if it happens today OR if it's within the last 24 hours (recent overdue)
+                if (date >= limitStart && date <= endOfDay) {
+                    const isOverdue = date < now;
+                    return { ...r, type, time: date, isOverdue };
                 }
                 
                 return null;
             })
-            .filter((r): r is Reservation & { type: 'departure' | 'arrival'; time: Date } => !!r)
+            .filter((r): r is Reservation & { type: 'departure' | 'arrival'; time: Date; isOverdue: boolean } => !!r)
             .sort((a, b) => a.time.getTime() - b.time.getTime());
     }, [reservations]);
 
@@ -392,7 +397,33 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-lg shadow-md">
                      <h2 className="text-xl font-bold text-gray-700 mb-4">Dnešní aktivity</h2>
-                     {todaysActivities.length > 0 ? (<div className="flow-root"><ul role="list" className="-mb-8">{todaysActivities.map((res, index) => (<li key={res.id}><div className="relative pb-8">{index !== todaysActivities.length - 1 ? (<span className="absolute left-5 top-5 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true" />) : null}<div className="relative flex space-x-4"><div><span className={`h-10 w-10 rounded-full flex items-center justify-center ring-8 ring-white ${res.type === 'departure' ? 'bg-green-500' : 'bg-yellow-500'}`}>{res.type === 'departure' ? <ArrowUpCircle className="h-6 w-6 text-white" /> : <ArrowDownCircle className="h-6 w-6 text-white" />}</span></div><div className="min-w-0 flex-1 pt-1.5"><div className="flex justify-between items-start"><div><p className="text-lg font-bold text-gray-800">{res.time.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}</p><p className="font-semibold mt-1">{res.customer?.firstName} {res.customer?.lastName}</p><div className="mt-2 space-y-1 text-sm text-gray-600"><p className="flex items-center"><Car className="w-4 h-4 mr-2 flex-shrink-0 text-gray-400" />{res.vehicle?.name} (<span className="font-mono text-xs">{res.vehicle?.licensePlate}</span>)</p><a href={`tel:${res.customer?.phone}`} className="flex items-center text-blue-600 hover:underline"><Phone className="w-4 h-4 mr-2 flex-shrink-0" />{res.customer?.phone}</a></div></div><div className="flex-shrink-0 ml-4 mt-1">{res.type === 'departure' ? (<button onClick={() => handleOpenDetailModal(res)} disabled={res.vehicle?.status !== 'available'} className={`px-3 py-1 rounded text-sm font-semibold text-white transition-colors ${res.vehicle?.status === 'available' ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 cursor-not-allowed'}`} title={res.vehicle?.status !== 'available' ? 'Vozidlo není k dispozici (je pronajaté nebo v servisu)' : 'Vydat vozidlo'}>{res.vehicle?.status === 'available' ? 'Vydat' : 'Blokováno'}</button>) : (<button onClick={() => handleOpenDetailModal(res)} className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 text-sm font-semibold">Převzít</button>)}</div></div></div></div></div></li>))}</ul></div>) : <p className="text-gray-500">Dnes nejsou plánované žádné odjezdy ani příjezdy.</p>}
+                     {todaysActivities.length > 0 ? (<div className="flow-root"><ul role="list" className="-mb-8">{todaysActivities.map((res, index) => (<li key={res.id}><div className="relative pb-8">{index !== todaysActivities.length - 1 ? (<span className="absolute left-5 top-5 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true" />) : null}<div className="relative flex space-x-4"><div><span className={`h-10 w-10 rounded-full flex items-center justify-center ring-8 ring-white ${res.type === 'departure' ? 'bg-green-500' : 'bg-yellow-500'}`}>{res.type === 'departure' ? <ArrowUpCircle className="h-6 w-6 text-white" /> : <ArrowDownCircle className="h-6 w-6 text-white" />}</span></div><div className="min-w-0 flex-1 pt-1.5">                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="flex items-center">
+                                                <p className="text-lg font-bold text-gray-800">{res.time.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}</p>
+                                                {res.isOverdue && (
+                                                    <span className="ml-2 px-2 py-0.5 bg-red-100 text-red-600 text-xs font-bold rounded-full animate-pulse">ZPOŽDĚNO</span>
+                                                )}
+                                            </div>
+                                            <p className="font-semibold mt-1">{res.customer?.firstName} {res.customer?.lastName}</p>
+                                            <div className="mt-2 space-y-1 text-sm text-gray-600">
+                                                <p className="flex items-center"><Car className="w-4 h-4 mr-2 flex-shrink-0 text-gray-400" />{res.vehicle?.name} (<span className="font-mono text-xs">{res.vehicle?.licensePlate}</span>)</p>
+                                                <a href={`tel:${res.customer?.phone}`} className="flex items-center text-blue-600 hover:underline"><Phone className="w-4 h-4 mr-2 flex-shrink-0" />{res.customer?.phone}</a>
+                                            </div>
+                                        </div>
+                                        <div className="flex-shrink-0 ml-4 mt-1">
+                                            {res.type === 'departure' ? (
+                                                <button onClick={() => handleOpenDetailModal(res)} disabled={res.vehicle?.status !== 'available'} className={`px-3 py-1 rounded text-sm font-semibold text-white transition-colors ${res.vehicle?.status === 'available' ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 cursor-not-allowed'}`} title={res.vehicle?.status !== 'available' ? 'Vozidlo není k dispozici (je pronajaté nebo v servisu)' : 'Vydat vozidlo'}>
+                                                    {res.vehicle?.status === 'available' ? 'Vydat' : 'Blokováno'}
+                                                </button>
+                                            ) : (
+                                                <button onClick={() => handleOpenDetailModal(res)} className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 text-sm font-semibold">
+                                                    Převzít
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+</div></div></div></li>))}</ul></div>) : <p className="text-gray-500">Dnes nejsou plánované žádné odjezdy ani příjezdy.</p>}
                 </div>
                 <div className="bg-white p-6 rounded-lg shadow-md">
                     <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center"><ArrowRightLeft className="mr-2 text-blue-600" /> Právě probíhající pronájmy</h2>
