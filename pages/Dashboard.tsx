@@ -75,29 +75,32 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
     const fleetUtilization = vehicles.length > 0 ? Math.round((vehicles.filter(v => v.status === 'rented').length / vehicles.length) * 100) : 0;
     
     const todaysActivities = useMemo(() => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(today.getDate() + 1);
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
         return reservations
             .map(r => {
                 let date: Date | null = null;
                 let type: 'departure' | 'arrival' | null = null;
 
+                // Departures: Scheduled reservations starting today or in the past (overdue)
                 if (r.status === 'scheduled' && r.startDate) {
                     date = new Date(r.startDate);
                     type = 'departure';
-                } else if (r.status === 'active' && r.endDate) {
+                } 
+                // Arrivals: Active reservations ending today or in the past (overdue)
+                else if (r.status === 'active' && r.endDate) {
                     date = new Date(r.endDate);
                     type = 'arrival';
                 }
 
                 if (!date || isNaN(date.getTime())) {
-                    return null; // Skip reservations with invalid dates
+                    return null;
                 }
                 
-                if (date >= today && date < tomorrow) {
+                // Show if it happens today OR if it's in the past (overdue)
+                if (date <= endOfDay) {
                     return { ...r, type, time: date };
                 }
                 
@@ -151,15 +154,16 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
     );
 
     const { availableToday, availableTomorrow } = useMemo(() => {
-        const today = new Date();
-        const todayStart = new Date(today.setHours(0, 0, 0, 0));
-        const todayEnd = new Date(today.setHours(23, 59, 59, 999));
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
         
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowStart = new Date(tomorrow.setHours(0, 0, 0, 0));
-        const tomorrowEnd = new Date(tomorrow.setHours(23, 59, 59, 999));
+        const tomorrowStart = new Date(todayStart);
+        tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+        const tomorrowEnd = new Date(tomorrowStart);
+        tomorrowEnd.setHours(23, 59, 59, 999);
 
+        // Include all active or scheduled for overlap checks
         const activeAndScheduled = reservations.filter(r => r.status === 'active' || r.status === 'scheduled');
         
         const todayVehicles: { vehicle: Vehicle, note?: string }[] = [];
@@ -169,14 +173,30 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
             if (v.status === 'maintenance') return;
 
             // Check for Today
-            if (v.status === 'available') {
-                todayVehicles.push({ vehicle: v });
-            } else if (v.status === 'rented') {
-                const rental = activeAndScheduled.find(r => r.vehicleId === v.id && r.status === 'active');
-                if (rental && rental.endDate) {
-                    const endDate = new Date(rental.endDate);
-                    if (endDate >= todayStart && endDate <= todayEnd) {
-                        todayVehicles.push({ vehicle: v, note: `(od ${endDate.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })})` });
+            // A vehicle is available today if it's NOT rented currently, 
+            // OR if it returns earlier today AND doesn't have another reservation starting too soon.
+            const todayBookings = activeAndScheduled.filter(r => r.vehicleId === v.id && (new Date(r.startDate) < todayEnd && new Date(r.endDate) > todayStart));
+            
+            const currentlyRented = activeAndScheduled.find(r => r.vehicleId === v.id && r.status === 'active');
+            
+            if (!currentlyRented) {
+                // If not rented, check if it has a booking starting SOON (within next 2 hours or already started)
+                const nextBooking = todayBookings.find(r => new Date(r.startDate) > now || (new Date(r.startDate) <= now && new Date(r.endDate) > now));
+                if (!nextBooking) {
+                    todayVehicles.push({ vehicle: v });
+                } else if (new Date(nextBooking.startDate) > now) {
+                    // Available only until...
+                    const until = new Date(nextBooking.startDate);
+                    todayVehicles.push({ vehicle: v, note: `(do ${until.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })})` });
+                }
+            } else {
+                // Currently rented, is it returning today?
+                const returnTime = new Date(currentlyRented.endDate);
+                if (returnTime >= todayStart && returnTime <= todayEnd) {
+                    // Returns today. Check if there's another booking right after it.
+                    const hasConflictLater = todayBookings.some(r => r.id !== currentlyRented.id && new Date(r.startDate) < new Date(returnTime.getTime() + 60*60000));
+                    if (!hasConflictLater) {
+                        todayVehicles.push({ vehicle: v, note: `(od ${returnTime.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })})` });
                     }
                 }
             }

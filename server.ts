@@ -94,7 +94,7 @@ app.get("/api/admin/data", authenticateUser, async (req, res) => {
 app.get("/api/public/booking-data", async (req, res) => {
   try {
     const [vehicles, reservations] = await Promise.all([
-      supabase.from('vehicles').select('id, name, make, model, year, image_url, rate4h, rate12h, daily_rate, features, current_mileage, description, dimensions'),
+      supabase.from('vehicles').select('id, name, make, model, year, status, image_url, rate4h, rate12h, daily_rate, features, current_mileage, description, dimensions'),
       supabase.from('reservations').select('vehicle_id, start_date, end_date, status'),
     ]);
     res.json({ vehicles: vehicles.data, reservations: reservations.data });

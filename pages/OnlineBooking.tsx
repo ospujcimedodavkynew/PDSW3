@@ -102,7 +102,7 @@ const OnlineBooking: React.FC = () => {
                     availabilityStatus: VehicleAvailabilityStatus.AVAILABLE_NOW,
                 };
 
-                if (vehicle.status === 'maintenance') {
+                if (vehicle.status !== 'available') {
                     displayVehicle.availabilityStatus = VehicleAvailabilityStatus.UNAVAILABLE;
                     return displayVehicle;
                 }
