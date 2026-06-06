@@ -78,10 +78,6 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
         const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-        
-        // Limit to today and yesterday to avoid clutter from months-old forgotten records
-        const limitStart = new Date(startOfDay);
-        limitStart.setDate(limitStart.getDate() - 1);
 
         return reservations
             .map(r => {
@@ -103,9 +99,9 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                     return null;
                 }
                 
-                // Show if it happens today OR if it's within the last 24 hours (recent overdue)
-                if (date >= limitStart && date <= endOfDay) {
-                    const isOverdue = date < now;
+                // Show if it is overdue (happened in the past) or happens today
+                const isOverdue = date < now;
+                if (isOverdue || (date >= startOfDay && date <= endOfDay)) {
                     return { ...r, type, time: date, isOverdue };
                 }
                 

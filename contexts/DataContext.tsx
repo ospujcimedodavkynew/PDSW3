@@ -383,6 +383,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         },
         addReservation: async (reservationData) => {
             const newReservation = await api.addReservation(reservationData);
+            await refreshData();
             return newReservation;
         },
         updateReservation: async (reservationId, updates) => {
@@ -492,7 +493,7 @@ ${signatureImgTag}
                 signatureUrl,
             });
 
-            await api.updateReservation(reservationId, { status: 'completed', endMileage });
+            await api.updateReservation(reservationId, { status: 'completed', endMileage, endDate: new Date() });
             await api.updateVehicle({ ...reservation.vehicle, status: 'available', currentMileage: endMileage });
             
             const durationMs = new Date(reservation.endDate).getTime() - new Date(reservation.startDate).getTime();
