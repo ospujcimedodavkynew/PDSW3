@@ -498,8 +498,13 @@ export const updateVehicle = async (vehicleData: Vehicle): Promise<Vehicle> => {
     return fromVehicle(data);
 };
 
-export const addReservation = async (reservationData: Omit<Reservation, 'id' | 'status'>): Promise<Reservation> => {
-    const payload = { ...toReservation(reservationData), status: 'scheduled' };
+export const addReservation = async (reservationData: Omit<Reservation, 'id' | 'status'> & { status?: string; startMileage?: number }): Promise<Reservation> => {
+    const { status, startMileage, ...rest } = reservationData;
+    const payload = { 
+        ...toReservation(rest), 
+        status: status || 'scheduled',
+        start_mileage: startMileage
+    };
     const data = await callApi('/reservations', {
         method: 'POST',
         body: JSON.stringify(payload),

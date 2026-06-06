@@ -102,6 +102,25 @@ const Reservations: React.FC = () => {
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
     const [generatedContractInfo, setGeneratedContractInfo] = useState<{contractId: string, customerEmail: string, vehicleName: string} | null>(null);
 
+    const [activateImmediately, setActivateImmediately] = useState(false);
+
+    // Update activateImmediately based on selected startDate
+    useEffect(() => {
+        if (startDate) {
+            const start = new Date(startDate);
+            const today = new Date();
+            // If the booking begins today (same day) or in the past
+            const isToday = start.getFullYear() === today.getFullYear() &&
+                            start.getMonth() === today.getMonth() &&
+                            start.getDate() === today.getDate();
+            const isPast = start < today;
+            
+            setActivateImmediately(isToday || isPast);
+        } else {
+            setActivateImmediately(false);
+        }
+    }, [startDate]);
+
     const filteredCustomers = useMemo(() => {
         if (!customerSearchTerm) return customers;
         const lowercasedTerm = customerSearchTerm.toLowerCase();
@@ -231,19 +250,21 @@ const Reservations: React.FC = () => {
                     return; 
                 }
 
+                const contractVehicle = vehicles.find(v => v.id === selectedVehicleId);
+                if (!contractVehicle) throw new Error("Vozidlo nebylo nalezeno.");
+
                 const newReservation = await actions.addReservation({
                     customerId: finalCustomerId,
                     vehicleId: selectedVehicleId,
                     startDate: new Date(formData.startDate),
                     endDate: new Date(formData.endDate),
                     destination: formData.destination,
-                    expectedMileage: formData.expectedMileage ? Number(formData.expectedMileage) : undefined
+                    expectedMileage: formData.expectedMileage ? Number(formData.expectedMileage) : undefined,
+                    status: activateImmediately ? 'active' : 'scheduled',
+                    startMileage: activateImmediately ? contractVehicle.currentMileage : undefined
                 });
 
                 if (!newReservation || !newReservation.id) throw new Error("Rezervace nebyla vytvořena serverem.");
-
-                const contractVehicle = vehicles.find(v => v.id === selectedVehicleId);
-                if (!contractVehicle) throw new Error("Vozidlo nebylo nalezeno.");
 
                 const contractText = generateContractText({
                     customer: customerForContract,
@@ -261,7 +282,7 @@ const Reservations: React.FC = () => {
                     vehicleId: selectedVehicleId,
                     generatedAt: new Date(),
                     contractText,
-                }, signatureDataUrl);
+                }, signatureDataUrl, activateImmediately, contractVehicle.currentMileage);
 
                 if (!newContract) throw new Error("Rezervace byla vytvořena, ale nepodařilo se vygenerovat smlouvu. Prosím zkontrolujte detail rezervace.");
 
@@ -440,8 +461,26 @@ const Reservations: React.FC = () => {
 
                     {/* Signature Section - Hidden when editing */}
                     {!isEditing && (
-                        <section>
-                             <h2 className="text-xl font-semibold text-gray-700 flex items-center mb-4"><Signature className="mr-2"/>4. Podpis zákazníka</h2>
+                        <section className="space-y-4">
+                             <h2 className="text-xl font-semibold text-gray-700 flex items-center mb-2"><Signature className="mr-2"/>4. Podpis zákazníka</h2>
+                             
+                             <div className="flex items-start bg-blue-50 border border-blue-200 p-4 rounded-lg mb-4">
+                                 <div className="flex items-center h-5">
+                                     <input
+                                         id="activateImmediately"
+                                         type="checkbox"
+                                         checked={activateImmediately}
+                                         onChange={(e) => setActivateImmediately(e.target.checked)}
+                                         className="h-5 w-5 text-primary border-gray-300 rounded focus:ring-primary cursor-pointer"
+                                     />
+                                 </div>
+                                 <div className="ml-3 text-sm">
+                                     <label htmlFor="activateImmediately" className="font-bold text-gray-800 flex items-center cursor-pointer">
+                                         Předat vozidlo ihned (aktivovat pronájem a nastavit stav vozidla na "Pronajato")
+                                     </label>
+                                     <p className="text-gray-650 mt-0.5">Zákazník si vozidlo přebírá na pobočce. Systém automaticky aktivuje pronájem, změní stav vozidla a vytvoří předávací protokol o vydání vozidla s dnešním stavem tachometru.</p>
+                                 </div>
+                             </div>
                              {signatureDataUrl ? (
                                  <div className="border border-gray-300 rounded-lg p-4 flex items-center justify-between">
                                      <div className="bg-gray-100 p-2 rounded">

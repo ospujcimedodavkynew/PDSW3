@@ -33,13 +33,13 @@ interface DataContextActions {
     updateVehicle: (vehicleData: Vehicle) => Promise<void>;
     openVehicleFormModal: (vehicle: Partial<Vehicle> | null) => void;
     closeVehicleFormModal: () => void;
-    addReservation: (reservationData: Omit<Reservation, 'id' | 'status'>) => Promise<Reservation>;
+    addReservation: (reservationData: Omit<Reservation, 'id' | 'status'> & { status?: string; startMileage?: number }) => Promise<Reservation>;
     updateReservation: (reservationId: string, updates: Partial<Reservation>) => Promise<void>;
     approveReservation: (reservationId: string) => Promise<{ contractId: string; customerEmail: string; vehicleName: string; } | null>;
     rejectReservation: (reservationId: string) => Promise<void>;
     activateReservation: (reservationId: string, startMileage: number, signatureDataUrl: string) => Promise<void>;
     completeReservation: (reservationId: string, endMileage: number, protocolData: ProtocolData, signatureDataUrl: string, refuelingCost?: number, forfeitDeposit?: boolean) => Promise<void>;
-    addContract: (contractData: Omit<Contract, 'id'>, signatureDataUrl: string) => Promise<Contract>;
+    addContract: (contractData: Omit<Contract, 'id'>, signatureDataUrl: string, activateImmediately?: boolean, startMileage?: number) => Promise<Contract>;
     updateContract: (contractId: string, updates: Partial<Contract>) => Promise<void>;
     addExpense: (expenseData: { description: string; amount: number; date: Date; }) => Promise<void>;
     addService: (serviceData: Omit<VehicleService, 'id'>) => Promise<void>;
@@ -383,7 +383,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         },
         addReservation: async (reservationData) => {
             const newReservation = await api.addReservation(reservationData);
-            await refreshData();
             return newReservation;
         },
         updateReservation: async (reservationId, updates) => {
@@ -541,13 +540,32 @@ ${signatureImgTag}
 
             await refreshData();
         },
-        addContract: async (contractData, signatureDataUrl) => {
+        addContract: async (contractData, signatureDataUrl, activateImmediately, startMileage) => {
             const signatureUrl = await uploadSignature(signatureDataUrl);
             const signatureImgTag = `<img src="${signatureUrl}" alt="signature" style="width: 250px; height: auto;" />`;
             const finalContractText = contractData.contractText.replace('%%SIGNATURE_IMAGE%%', signatureImgTag);
             
             // This action is only for manual reservations, so we don't need to check for existing contracts.
             const newContract = await api.addContract({ ...contractData, contractText: finalContractText });
+
+            if (activateImmediately && startMileage !== undefined) {
+                const vehicle = data.vehicles.find(v => v.id === contractData.vehicleId);
+                const customer = data.customers.find(c => c.id === contractData.customerId);
+                if (vehicle) {
+                    await api.updateVehicle({ ...vehicle, status: 'rented', currentMileage: startMileage });
+                    const customerName = customer ? `${customer.firstName} ${customer.lastName}` : 'Zákazník';
+                    const protocolText = `PŘEDÁVACÍ PROTOKOL (PŘEDÁNÍ)\n\nZákazník: ${customerName}\nVozidlo: ${vehicle.name} (${vehicle.licensePlate})\nPočáteční stav km: ${startMileage}\n\nDigitální podpis zákazníka:\n${signatureImgTag}`;
+                    await api.addHandoverProtocol({
+                        reservationId: contractData.reservationId,
+                        customerId: contractData.customerId,
+                        vehicleId: contractData.vehicleId,
+                        generatedAt: new Date(),
+                        protocolText,
+                        signatureUrl,
+                    });
+                }
+            }
+
             await refreshData();
             return newContract;
         },
