@@ -37,6 +37,7 @@ interface DataContextActions {
     updateReservation: (reservationId: string, updates: Partial<Reservation>) => Promise<void>;
     approveReservation: (reservationId: string) => Promise<{ contractId: string; customerEmail: string; vehicleName: string; } | null>;
     rejectReservation: (reservationId: string) => Promise<void>;
+    rejectMultipleReservations: (reservationIds: string[]) => Promise<void>;
     activateReservation: (reservationId: string, startMileage: number, signatureDataUrl: string) => Promise<void>;
     completeReservation: (reservationId: string, endMileage: number, protocolData: ProtocolData, signatureDataUrl: string, refuelingCost?: number, forfeitDeposit?: boolean) => Promise<void>;
     addContract: (contractData: Omit<Contract, 'id'>, signatureDataUrl: string, activateImmediately?: boolean, startMileage?: number) => Promise<Contract>;
@@ -426,6 +427,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         },
         rejectReservation: async (reservationId) => {
             await api.deleteReservation(reservationId);
+            await refreshData();
+        },
+        rejectMultipleReservations: async (reservationIds) => {
+            await api.bulkDeleteReservations(reservationIds);
             await refreshData();
         },
         activateReservation: async (reservationId, startMileage, signatureDataUrl) => {

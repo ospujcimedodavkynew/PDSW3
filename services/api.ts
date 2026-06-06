@@ -526,6 +526,13 @@ export const deleteReservation = async (reservationId: string): Promise<void> =>
     });
 };
 
+export const bulkDeleteReservations = async (reservationIds: string[]): Promise<void> => {
+    await callApi('/reservations/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify({ ids: reservationIds }),
+    });
+};
+
 export const addContract = async (contractData: Omit<Contract, 'id'>): Promise<Contract> => {
     const data = await callApi('/contracts', {
         method: 'POST',

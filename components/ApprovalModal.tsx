@@ -44,6 +44,23 @@ const ApprovalModal: React.FC<ApprovalModalProps> = ({ isOpen, onClose, reservat
             }
         }
     };
+
+    const handleRejectAll = async () => {
+        const text = `Opravdu chcete hromadně zamítnout a smazat všech ${reservations.length} rezervací?\nTato akce je nevratná a odstraní všechny tyto rezervace.`;
+        if (window.confirm(text)) {
+            setProcessingId('bulk-deleting-all');
+            try {
+                const ids = reservations.map(r => r.id);
+                await actions.rejectMultipleReservations(ids);
+                alert("Všechny rezervace byly úspěšně hromadně zamítnuty a smazány.");
+            } catch (error) {
+                console.error("Failed to bulk reject reservations:", error);
+                alert("Hromadné smazání se nezdařilo.");
+            } finally {
+                setProcessingId(null);
+            }
+        }
+    };
     
     const handleEdit = (res: Reservation) => {
         actions.setReservationToEdit(res);
@@ -76,12 +93,31 @@ const ApprovalModal: React.FC<ApprovalModalProps> = ({ isOpen, onClose, reservat
                 contractInfo={confirmationInfo}
             />
             <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-4xl">
-                <div className="flex justify-between items-center mb-4 border-b pb-4">
-                    <h2 className="text-2xl font-bold text-gray-800">Rezervace ke schválení ({reservations.length})</h2>
-                    <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200"><X className="w-6 h-6" /></button>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 border-b pb-4">
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-800">Rezervace ke schválení ({reservations.length})</h2>
+                        <p className="text-xs text-gray-500 mt-1">Tyto online rezervace čekají na potvrzení nebo zamítnutí.</p>
+                    </div>
+                    <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                        {reservations.length > 1 && processingId !== 'bulk-deleting-all' && (
+                            <button
+                                onClick={handleRejectAll}
+                                className="flex items-center text-sm py-2 px-3 rounded-md font-semibold bg-red-600 text-white hover:bg-red-750 transition-colors shadow-sm"
+                            >
+                                <Trash2 className="w-4 h-4 mr-2" /> Zamítnout a smazat vše ({reservations.length})
+                            </button>
+                        )}
+                        <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200"><X className="w-6 h-6 text-gray-600" /></button>
+                    </div>
                 </div>
                 
-                {reservations.length > 0 ? (
+                {processingId === 'bulk-deleting-all' ? (
+                    <div className="flex flex-col justify-center items-center py-20 space-y-4">
+                        <Loader className="w-12 h-12 text-red-600 animate-spin" />
+                        <p className="font-semibold text-gray-750 text-lg">Zpracovávám hromadné mazání {reservations.length} rezervací...</p>
+                        <p className="text-sm text-gray-500">Čekejte prosím, provádíme bezpečné odstranění dat.</p>
+                    </div>
+                ) : reservations.length > 0 ? (
                     <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-2">
                         {reservations.map(res => (
                             <div key={res.id} className="bg-gray-50 border rounded-lg p-4 flex flex-col md:flex-row justify-between items-start gap-4">

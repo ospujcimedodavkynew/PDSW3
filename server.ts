@@ -287,6 +287,24 @@ app.patch("/api/:table/:id", async (req, res) => {
     res.json({ status: "deleted" });
   });
 
+  // Hromadné mazání pro více ID - vyžaduje přihlášení
+  app.post("/api/:table/bulk-delete", authenticateUser, async (req, res) => {
+    const { table } = req.params;
+    const { ids } = req.body;
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "Nebyl poskytnut seznam ID nebo formát je neplatný" });
+    }
+
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .in('id', ids);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ status: "bulk-deleted", count: ids.length });
+  });
+
   // Vehicle services
   app.get("/api/vehicles/:id/services", async (req, res) => {
     const { data, error } = await supabase

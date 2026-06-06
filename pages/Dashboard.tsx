@@ -5,6 +5,7 @@ import { Car, Users, CalendarCheck, AlertTriangle, Link, ArrowRightLeft, Wrench,
 import ReservationDetailModal from '../components/ReservationDetailModal';
 import SelfServiceModal from '../components/SelfServiceModal';
 import ApprovalModal from '../components/ApprovalModal';
+import BulkCleanupModal from '../components/BulkCleanupModal';
 import { useData } from '../contexts/DataContext';
 
 
@@ -18,6 +19,7 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [isSelfServiceModalOpen, setIsSelfServiceModalOpen] = useState(false);
     const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+    const [isCleanupModalOpen, setIsCleanupModalOpen] = useState(false);
 
     const upcomingEvents = useMemo(() => {
         const today = new Date();
@@ -113,6 +115,11 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
 
 
     const activeRentals = reservations.filter(r => r.status === 'active');
+
+    const forgottenReservations = useMemo(() => {
+        const now = new Date();
+        return reservations.filter(r => r.status === 'scheduled' && r.startDate && new Date(r.startDate) < now);
+    }, [reservations]);
     
     const futureRentals = useMemo(() => {
         const endOfToday = new Date();
@@ -271,7 +278,7 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
 
     if (loading && vehicles.length === 0) return <div>Načítání přehledu...</div>;
     
-    const hasAlerts = maintenanceVehicles.length > 0 || upcomingEvents.length > 0;
+    const hasAlerts = maintenanceVehicles.length > 0 || upcomingEvents.length > 0 || forgottenReservations.length > 0;
     
     const getReturnStatus = (endDate: Date | string) => {
         if (!endDate) {
@@ -335,6 +342,12 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                 onClose={() => setIsApprovalModalOpen(false)} 
                 reservations={pendingApprovalReservations}
                 onNavigateToPage={setCurrentPage}
+            />
+            <BulkCleanupModal 
+                isOpen={isCleanupModalOpen} 
+                onClose={() => setIsCleanupModalOpen(false)} 
+                reservations={forgottenReservations} 
+                onClean={actions.rejectMultipleReservations} 
             />
             <ReservationDetailModal isOpen={isDetailModalOpen} onClose={handleCloseModal} reservation={selectedReservation} />
             <SelfServiceModal isOpen={isSelfServiceModalOpen} onClose={() => setIsSelfServiceModalOpen(false)} availableVehicles={vehicles.filter(v => v.status === 'available')} onLinkGenerated={onSelfServiceLinkGenerated} />
@@ -439,7 +452,24 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
                  <div className="bg-white p-6 rounded-lg shadow-md">
                     <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center"><AlertTriangle className="mr-2 text-red-500"/>Upozornění</h2>
                     {hasAlerts ? (
-                        <ul className="space-y-3 max-h-40 overflow-y-auto">
+                        <ul className="space-y-3 max-h-60 overflow-y-auto">
+                            {forgottenReservations.length > 0 && (
+                                <li className="text-gray-650 flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg gap-2 col-span-full">
+                                    <div className="flex items-start">
+                                        <AlertTriangle className="w-5 h-5 mr-2 mt-0.5 text-red-600 flex-shrink-0" />
+                                        <div>
+                                            <span className="font-semibold text-red-800">Máte {forgottenReservations.length} neuskutečněných rezervací z minulosti.</span>
+                                            <p className="text-xs text-gray-500">Tyto staré rezervace nebyly předány ani stornovány.</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setIsCleanupModalOpen(true)}
+                                        className="text-xs font-bold bg-red-650 text-white cursor-pointer px-2.5 py-1.5 rounded-md hover:bg-red-750 whitespace-nowrap self-end sm:self-center transition-colors shadow-sm"
+                                    >
+                                        Vyčistit hromadně
+                                    </button>
+                                </li>
+                            )}
                             {maintenanceVehicles.map(v => (
                                 <li key={v.id} className="text-gray-600 flex items-start">
                                     <Car className="w-4 h-4 mr-2 mt-1 text-red-500 flex-shrink-0"/>
