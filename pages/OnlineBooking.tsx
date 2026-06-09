@@ -5,7 +5,7 @@ import { CheckCircle, Loader, Clock } from 'lucide-react';
 import { getPublicBookingData } from '../services/api';
 import { calculateTotalPrice } from '../contexts/DataContext'; // Import centralizované funkce
 
-const PREPARATION_BUFFER_MINUTES = 20;
+const PREPARATION_BUFFER_MINUTES = 30;
 
 enum VehicleAvailabilityStatus {
     AVAILABLE_NOW,
@@ -96,22 +96,35 @@ const OnlineBooking: React.FC = () => {
         const timer = setTimeout(() => {
             const desiredStart = startDateObj;
 
+            const now = new Date();
             const categorizedVehicles = allVehicles.map(vehicle => {
                 const displayVehicle: DisplayVehicle = {
                     ...vehicle,
                     availabilityStatus: VehicleAvailabilityStatus.AVAILABLE_NOW,
                 };
 
-                if (vehicle.status !== 'available') {
+                // Only block globally if the vehicle is in maintenance
+                if (vehicle.status === 'maintenance') {
                     displayVehicle.availabilityStatus = VehicleAvailabilityStatus.UNAVAILABLE;
                     return displayVehicle;
                 }
 
                 // 1. Find all active/related reservations for this vehicle
-                const vehicleReservations = allReservations.filter(r =>
-                    r.vehicleId === vehicle.id &&
-                    ['scheduled', 'active', 'pending-approval', 'pending-customer'].includes(r.status)
-                );
+                const vehicleReservations = allReservations.filter(r => {
+                    if (r.vehicleId !== vehicle.id) return false;
+                    if (!['scheduled', 'active', 'pending-approval', 'pending-customer'].includes(r.status)) return false;
+
+                    // If a reservation is scheduled but its start time is in the past by more than 30 minutes,
+                    // and it was not yet activated (still in 'scheduled' status), we ignore it so it doesn't block online booking.
+                    if (r.status === 'scheduled') {
+                        const resStart = new Date(r.startDate);
+                        const cutoff = new Date(resStart.getTime() + 30 * 60000);
+                        if (now > cutoff) {
+                            return false;
+                        }
+                    }
+                    return true;
+                });
 
                 // 2. Check for direct overlap with requested period
                 const overlappingReservation = vehicleReservations.find(r => {

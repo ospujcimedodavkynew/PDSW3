@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, FileText, Gauge, ShieldAlert, Camera, PlusCircle, Trash2, Wind, Droplets, KeyRound, CheckSquare, Signature, Edit } from 'lucide-react';
+import { X, FileText, Gauge, ShieldAlert, Camera, PlusCircle, Trash2, Wind, Droplets, KeyRound, CheckSquare, Signature, Edit, Clock } from 'lucide-react';
 import { Reservation } from '../types';
-import { useData, ProtocolData } from '../contexts/DataContext';
+import { useData, ProtocolData, calculateTotalPrice, generateContractText } from '../contexts/DataContext';
 import SignatureModal from './SignatureModal';
 
 
@@ -19,7 +19,7 @@ interface ReservationDetailModalProps {
 }
 
 const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen, onClose, reservation }) => {
-    const { actions } = useData();
+    const { data, actions } = useData();
 
     // --- HOOKS ---
     const [isProcessing, setIsProcessing] = useState(false);
@@ -46,6 +46,10 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
     const [damageLocation, setDamageLocation] = useState('');
     const [damageImageFile, setDamageImageFile] = useState<File | null>(null);
 
+    // Extension state
+    const [isExtending, setIsExtending] = useState(false);
+    const [newEndDate, setNewEndDate] = useState<string>('');
+
     useEffect(() => {
         if (isOpen && reservation) {
             // Reset all state on open to avoid stale data
@@ -63,6 +67,22 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
             setReturnSignatureDataUrl('');
             setRefuelingCost('');
             setForfeitDeposit(false);
+            setIsExtending(false);
+            try {
+                if (reservation.endDate) {
+                    const dateObj = new Date(reservation.endDate);
+                    if (!isNaN(dateObj.getTime())) {
+                        setNewEndDate(dateObj.toISOString().slice(0, 16));
+                    } else {
+                        setNewEndDate('');
+                    }
+                } else {
+                    setNewEndDate('');
+                }
+            } catch (e) {
+                console.error("Failed to parse end date string", e);
+                setNewEndDate('');
+            }
         }
     }, [isOpen, reservation]);
 
@@ -86,6 +106,41 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
 
         return { kmDriven, rentalDays, kmLimit, kmOver, extraCharge };
     }, [reservation, endMileage, isArrival]);
+
+    const originalPrice = useMemo(() => {
+        if (!reservation || !reservation.vehicle || !reservation.startDate || !reservation.endDate) return 0;
+        return calculateTotalPrice(reservation.vehicle, new Date(reservation.startDate), new Date(reservation.endDate));
+    }, [reservation]);
+
+    const newTotalPrice = useMemo(() => {
+        if (!reservation || !reservation.vehicle || !reservation.startDate || !newEndDate) return 0;
+        return calculateTotalPrice(reservation.vehicle, new Date(reservation.startDate), new Date(newEndDate));
+    }, [reservation, newEndDate]);
+
+    const priceDiff = useMemo(() => {
+        return Math.max(0, newTotalPrice - originalPrice);
+    }, [newTotalPrice, originalPrice]);
+
+    const extensionConflict = useMemo(() => {
+        if (!reservation || !newEndDate) return null;
+        const candidateEnd = new Date(newEndDate);
+        if (isNaN(candidateEnd.getTime())) return null;
+
+        const currentEnd = new Date(reservation.endDate);
+        if (candidateEnd <= currentEnd) return null;
+
+        // Check for conflicts starting after currentEnd and before candidateEnd
+        return data.reservations.find(r => {
+            if (r.id === reservation.id) return false;
+            if (r.vehicleId !== reservation.vehicleId) return false;
+            if (!['scheduled', 'active', 'pending-approval', 'pending-customer'].includes(r.status)) return false;
+
+            const rStart = new Date(r.startDate);
+            const rEnd = new Date(r.endDate);
+
+            return rStart < candidateEnd && rEnd > currentEnd;
+        }) || null;
+    }, [reservation, newEndDate, data.reservations]);
     
     if (!isOpen || !reservation) return null;
 
@@ -187,6 +242,66 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
         }
     };
     
+    const handleSaveExtension = async () => {
+        if (!reservation || !newEndDate) return;
+        setIsProcessing(true);
+        try {
+            const candidateEnd = new Date(newEndDate);
+            if (isNaN(candidateEnd.getTime())) {
+                alert('Neplatné datum ukončení.');
+                setIsProcessing(false);
+                return;
+            }
+            if (candidateEnd <= new Date(reservation.endDate)) {
+                alert('Nové datum musí být pozdější než původní konec.');
+                setIsProcessing(false);
+                return;
+            }
+
+            if (extensionConflict) {
+                alert('V tomto termínu probíhá jiná rezervace!');
+                setIsProcessing(false);
+                return;
+            }
+
+            // Update the reservation's end date
+            await actions.updateReservation(reservation.id, { endDate: candidateEnd });
+
+            // If a contract exists, update the contract's term & price text
+            const existingContract = data.contracts.find(c => c.reservationId === reservation.id);
+            if (existingContract) {
+                const updatedPrice = calculateTotalPrice(reservation.vehicle!, new Date(reservation.startDate), candidateEnd);
+                const updatedContractText = generateContractText({
+                    customer: reservation.customer!,
+                    vehicle: reservation.vehicle!,
+                    startDate: new Date(reservation.startDate),
+                    endDate: candidateEnd,
+                    totalPrice: updatedPrice,
+                    destination: reservation.destination,
+                    expectedMileage: reservation.expectedMileage,
+                }, existingContract.contractText.includes('Digitální podpis nájemce') ? 'image_placeholder' : 'text_placeholder');
+
+                let finalContractText = updatedContractText;
+                if (existingContract.contractText.includes('<img src=')) {
+                    const match = existingContract.contractText.match(/<img src="[^"]+" alt="signature"[^>]*>/);
+                    if (match) {
+                        finalContractText = updatedContractText.replace('%%SIGNATURE_IMAGE%%', match[0]);
+                    }
+                }
+                
+                await actions.updateContract(existingContract.id, { contractText: finalContractText });
+            }
+
+            alert('Pronájem byl úspěšně prodloužen.');
+            setIsExtending(false);
+        } catch (error) {
+            console.error("Failed to extend reservation", error);
+            alert(`Došlo k chybě: ${error instanceof Error ? error.message : "Neznámá chyba"}`);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+    
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start z-50 py-10 overflow-y-auto">
             <SignatureModal isOpen={isDepartureSignatureModalOpen} onClose={() => setIsDepartureSignatureModalOpen(false)} onSave={handleSaveDepartureSignature} />
@@ -219,8 +334,130 @@ const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({ isOpen,
                             <p className="text-base">{new Date(reservation.startDate).toLocaleString('cs-CZ')} - {new Date(reservation.endDate).toLocaleString('cs-CZ')}</p>
                             {reservation.destination && <p className="text-sm mt-1"><strong>Cíl:</strong> {reservation.destination}</p>}
                             {reservation.expectedMileage && <p className="text-sm"><strong>Předpoklad nájezdu:</strong> {reservation.expectedMileage.toLocaleString('cs-CZ')} km</p>}
+                            {['active', 'scheduled'].includes(reservation.status) && !isExtending && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (reservation.endDate) {
+                                            setNewEndDate(new Date(reservation.endDate).toISOString().slice(0, 16));
+                                        }
+                                        setIsExtending(true);
+                                    }}
+                                    className="mt-2 flex items-center text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 px-2.5 py-1.5 rounded hover:bg-indigo-100 transition-colors"
+                                >
+                                    <Clock className="w-3.5 h-3.5 mr-1" /> Prodloužit pronájem
+                                </button>
+                            )}
                         </div>
                     </div>
+
+                    {/* --- Extension form --- */}
+                    {isExtending && (
+                        <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-lg space-y-4 animate-fade-in">
+                            <h3 className="font-bold text-indigo-900 flex items-center">
+                                <Clock className="w-5 h-5 mr-2 text-indigo-600" />
+                                Prodloužení pronájmu
+                            </h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label htmlFor="newEndDate" className="block text-sm font-semibold text-gray-700 mb-1">Nový konec pronájmu</label>
+                                    <input
+                                        id="newEndDate"
+                                        type="datetime-local"
+                                        value={newEndDate}
+                                        onChange={(e) => setNewEndDate(e.target.value)}
+                                        className="w-full p-2 border border-gray-300 rounded-md bg-white focus:ring-indigo-500 focus:border-indigo-500"
+                                        min={new Date(reservation.startDate).toISOString().slice(0, 16)}
+                                    />
+                                </div>
+                                <div className="flex flex-col justify-end">
+                                    <div className="flex flex-wrap gap-1.5 font-sans">
+                                        {[
+                                            { label: '+4 h', h: 4 },
+                                            { label: '+12 h', h: 12 },
+                                            { label: '+1 den', h: 24 },
+                                            { label: '+2 dny', h: 48 },
+                                        ].map(preset => (
+                                            <button
+                                                type="button"
+                                                key={preset.label}
+                                                onClick={() => {
+                                                    const base = new Date(newEndDate || reservation.endDate);
+                                                    const updated = new Date(base.getTime() + preset.h * 60 * 60 * 1000);
+                                                    setNewEndDate(updated.toISOString().slice(0, 16));
+                                                }}
+                                                className="px-2 py-1 text-xs bg-white text-indigo-700 border border-indigo-200 rounded hover:bg-indigo-50 font-medium"
+                                            >
+                                                {preset.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Price / Availability summary */}
+                            <div className="bg-white p-3 rounded-lg border border-indigo-100 text-sm space-y-2">
+                                <p className="flex justify-between">
+                                    <span className="text-gray-500">Původní doba:</span>
+                                    <span>{new Date(reservation.startDate).toLocaleString('cs-CZ')} - {new Date(reservation.endDate).toLocaleString('cs-CZ')}</span>
+                                </p>
+                                <p className="flex justify-between">
+                                    <span className="text-gray-500">Nová doba:</span>
+                                    <span className="font-semibold">{new Date(reservation.startDate).toLocaleString('cs-CZ')} - {new Date(newEndDate).toLocaleString('cs-CZ')}</span>
+                                </p>
+                                <hr className="border-gray-100" />
+                                <p className="flex justify-between">
+                                    <span className="text-gray-500">Původní cena:</span>
+                                    <span>{originalPrice.toLocaleString('cs-CZ')} Kč</span>
+                                </p>
+                                <p className="flex justify-between">
+                                    <span className="text-gray-500">Nová celková cena:</span>
+                                    <span className="font-bold text-gray-900">{newTotalPrice.toLocaleString('cs-CZ')} Kč</span>
+                                </p>
+                                <p className="flex justify-between text-indigo-700 font-bold">
+                                    <span>Doplatek:</span>
+                                    <span>+{priceDiff.toLocaleString('cs-CZ')} Kč</span>
+                                </p>
+                            </div>
+
+                            {/* Verification message / conflicts */}
+                            {extensionConflict ? (
+                                <div className="bg-red-50 border border-red-200 p-3 rounded-md text-sm text-red-800 flex items-start">
+                                    <ShieldAlert className="w-4 h-4 mr-2 mt-0.5 text-red-650 flex-shrink-0" />
+                                    <div>
+                                        <p className="font-bold">Kolize s jinou rezervací!</p>
+                                        <p className="text-xs">
+                                            Vozidlo má v prodlouženém termínu jinou rezervaci ({extensionConflict.customer?.firstName} {extensionConflict.customer?.lastName} od {new Date(extensionConflict.startDate).toLocaleString('cs-CZ')}).
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-green-700 font-medium flex items-center">
+                                    <CheckSquare className="w-3.5 h-3.5 mr-1" />
+                                    Termín prodloužení je volný a bez kolizí.
+                                </p>
+                            )}
+
+                            {/* Action buttons */}
+                            <div className="flex justify-end space-x-2 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsExtending(false)}
+                                    className="py-1.5 px-3 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded-md"
+                                >
+                                    Zrušit
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleSaveExtension}
+                                    disabled={!!extensionConflict || isProcessing || new Date(newEndDate) <= new Date(reservation.endDate)}
+                                    className="py-1.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                >
+                                    {isProcessing ? 'Ukládám...' : 'Potvrdit prodloužení'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     
                     {isDeparture && ( // --- DEPARTURE VIEW ---
                         <div className="space-y-6">
