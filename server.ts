@@ -19,6 +19,36 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// Pomocná funkce pro bezpečné stažení všech záznamů z tabulky bez limitu 1000 řádků (Supabase hardcap)
+async function fetchAllFromTable(tableName: string) {
+  let allData: any[] = [];
+  let page = 0;
+  const pageSize = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('*')
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+
+    if (error) {
+      console.error(`Chyba stahování tabulky ${tableName} na stránce ${page}:`, error);
+      throw error;
+    }
+
+    if (data && data.length > 0) {
+      allData = allData.concat(data);
+      hasMore = data.length === pageSize;
+      page++;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return allData;
+}
+
 // --- Middleware pro ověření uživatele ---
 const authenticateUser = async (req: any, res: any, next: any) => {
   const authHeader = req.headers.authorization;
@@ -48,29 +78,30 @@ app.get("/api/health", (req, res) => {
 app.get("/api/admin/data", authenticateUser, async (req, res) => {
   try {
     const [vehicles, customers, reservations, contracts, protocols, financials, services, settings, invoices] = await Promise.all([
-        supabase.from('vehicles').select('*'),
-        supabase.from('customers').select('*'),
-        supabase.from('reservations').select('*'),
-        supabase.from('contracts').select('*'),
-        supabase.from('handover_protocols').select('*'),
-        supabase.from('financial_transactions').select('*'),
-        supabase.from('vehicle_services').select('*'),
-        supabase.from('company_settings').select('*').limit(1).maybeSingle(),
-        supabase.from('invoices').select('*'),
+        fetchAllFromTable('vehicles'),
+        fetchAllFromTable('customers'),
+        fetchAllFromTable('reservations'),
+        fetchAllFromTable('contracts'),
+        fetchAllFromTable('handover_protocols'),
+        fetchAllFromTable('financial_transactions'),
+        fetchAllFromTable('vehicle_services'),
+        supabase.from('company_settings').select('*').limit(1).maybeSingle().then(r => r.data),
+        fetchAllFromTable('invoices'),
       ]);
 
       res.json({
-        vehicles: vehicles.data,
-        customers: customers.data,
-        reservations: reservations.data,
-        contracts: contracts.data,
-        handoverProtocols: protocols.data,
-        financials: financials.data,
-        services: services.data,
-        settings: settings.data,
-        invoices: invoices.data,
+        vehicles,
+        customers,
+        reservations,
+        contracts,
+        handoverProtocols: protocols,
+        financials,
+        services,
+        settings,
+        invoices,
       });
     } catch (error) {
+      console.error("Error fetching admin data:", error);
       res.status(500).json({ error: "Failed to fetch admin data" });
     }
   });

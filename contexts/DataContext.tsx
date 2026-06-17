@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback, useRef } from 'react';
 import * as api from '../services/api';
 import { Customer, Reservation, Vehicle, Contract, FinancialTransaction, VehicleService, VehicleDamage, HandoverProtocol, CompanySettings, Invoice, Page, ReservationDefaults } from '../types';
 import { Session, RealtimeChannel } from '@supabase/supabase-js';
@@ -264,7 +264,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
         return localStorage.getItem('notifications_enabled') === 'true';
     });
-    const [lastKnownReservationIds, setLastKnownReservationIds] = useState<Set<string>>(new Set());
+    const lastKnownReservationIdsRef = useRef<Set<string>>(new Set());
 
     const playNotificationSound = useCallback(() => {
         if (!notificationsEnabled) return;
@@ -280,26 +280,33 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const expanded = expandData(allData);
             
             // Check for new online reservations
-            if (lastKnownReservationIds.size > 0) {
+            const lastIds = lastKnownReservationIdsRef.current;
+            if (lastIds.size > 0) {
                 const currentIds = new Set(expanded.reservations.map(r => r.id));
                 const newPendingReservations = expanded.reservations.filter(
-                    r => !lastKnownReservationIds.has(r.id) && (r.status === 'pending-approval' || r.status === 'pending-customer')
+                    r => !lastIds.has(r.id) && (r.status === 'pending-approval' || r.status === 'pending-customer')
                 );
                 
                 if (newPendingReservations.length > 0) {
                     console.log("New online reservation detected! Playing sound...");
                     playNotificationSound();
                 }
-                setLastKnownReservationIds(currentIds);
+                lastKnownReservationIdsRef.current = currentIds;
             } else {
-                setLastKnownReservationIds(new Set(expanded.reservations.map(r => r.id)));
+                lastKnownReservationIdsRef.current = new Set(expanded.reservations.map(r => r.id));
             }
             
             setData(expanded);
         } catch (error) {
             console.error("Failed to refresh data:", error);
         }
-    }, [lastKnownReservationIds, playNotificationSound]);
+    }, [playNotificationSound]);
+
+    // Keep a stable ref to refreshData to call it inside our static useEffect listener below
+    const refreshDataRef = useRef(refreshData);
+    useEffect(() => {
+        refreshDataRef.current = refreshData;
+    }, [refreshData]);
 
     useEffect(() => {
         let channel: RealtimeChannel | null = null;
@@ -309,7 +316,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.log("DataContext: Setting up realtime subscription...");
             channel = api.onNewReservation(() => {
                 console.log("New reservation detected, refreshing data...");
-                refreshData();
+                refreshDataRef.current();
             });
         };
 
@@ -327,7 +334,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setSession(newSession);
             
             if (newSession) {
-                refreshData().then(() => {
+                refreshDataRef.current().then(() => {
                     setupRealtime();
                     setLoading(false);
                 });
@@ -343,7 +350,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             authSubscription.unsubscribe();
             cleanupRealtime();
         };
-    }, [refreshData]);
+    }, []);
 
     const uploadSignature = async (signatureDataUrl: string): Promise<string> => {
         const signatureBlob = dataUrlToBlob(signatureDataUrl);
