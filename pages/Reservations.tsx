@@ -108,14 +108,10 @@ const Reservations: React.FC = () => {
     useEffect(() => {
         if (startDate) {
             const start = new Date(startDate);
-            const today = new Date();
-            // If the booking begins today (same day) or in the past
-            const isToday = start.getFullYear() === today.getFullYear() &&
-                            start.getMonth() === today.getMonth() &&
-                            start.getDate() === today.getDate();
-            const isPast = start < today;
-            
-            setActivateImmediately(isToday || isPast);
+            const now = new Date();
+            // Default to true ONLY if the booking starts in the past or exactly right now.
+            // If the booking begins in the future (e.g., later today or next week), do NOT auto-activate it.
+            setActivateImmediately(start <= now);
         } else {
             setActivateImmediately(false);
         }

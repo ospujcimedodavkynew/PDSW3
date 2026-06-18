@@ -114,7 +114,13 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
     }, [reservations]);
 
 
-    const activeRentals = reservations.filter(r => r.status === 'active');
+    const activeRentals = useMemo(() => {
+        const now = new Date();
+        return reservations.filter(r => 
+            r.status === 'active' && 
+            r.startDate && new Date(r.startDate) <= now
+        );
+    }, [reservations]);
 
     const forgottenReservations = useMemo(() => {
         const now = new Date();

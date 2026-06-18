@@ -353,11 +353,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     const uploadSignature = async (signatureDataUrl: string): Promise<string> => {
-        const signatureBlob = dataUrlToBlob(signatureDataUrl);
-        const signatureFile = new File([signatureBlob], `signature_${Date.now()}.png`, { type: 'image/png' });
-        // The path should not contain 'public/' as the api.uploadFile function handles it now.
-        const filePath = `${signatureFile.name}`;
-        return await api.uploadFile('signatures', filePath, signatureFile);
+        if (!signatureDataUrl) return '';
+        try {
+            const signatureBlob = dataUrlToBlob(signatureDataUrl);
+            const signatureFile = new File([signatureBlob], `signature_${Date.now()}.png`, { type: 'image/png' });
+            // The path should not contain 'public/' as the api.uploadFile function handles it now.
+            const filePath = `${signatureFile.name}`;
+            return await api.uploadFile('signatures', filePath, signatureFile);
+        } catch (error) {
+            console.error("Storage upload failed for signature, falling back to raw base64 data URL.", error);
+            return signatureDataUrl;
+        }
     };
 
     const actions: DataContextActions = useMemo(() => ({
@@ -448,11 +454,32 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const signatureImgTag = `<img src="${signatureUrl}" alt="signature" style="width: 250px; height: auto;" />`;
             
             // Find the contract created on approval
-            const existingContract = data.contracts.find(c => c.reservationId === reservationId);
-            if (!existingContract) throw new Error("Contract for reservation not found");
-            
-            const updatedContractText = existingContract.contractText.replace('Smlouva bude digitálně podepsána při převzetí vozidla.', `Digitální podpis nájemce:\n${signatureImgTag}`);
-            await api.updateContract(existingContract.id, { contractText: updatedContractText });
+            let existingContract = data.contracts.find(c => c.reservationId === reservationId);
+            if (!existingContract) {
+                console.warn("Contract for reservation not found during activation, creating on-the-fly fallback contract...");
+                const totalPrice = calculateTotalPrice(reservation.vehicle, new Date(reservation.startDate), new Date(reservation.endDate));
+                const fallbackContractText = generateContractText({
+                    customer: reservation.customer || { id: '', firstName: 'Nájemce', lastName: '', address: '', email: '', phone: '', driverLicenseNumber: '', ico: '' },
+                    vehicle: reservation.vehicle,
+                    startDate: new Date(reservation.startDate),
+                    endDate: new Date(reservation.endDate),
+                    totalPrice: totalPrice,
+                    destination: reservation.destination,
+                    expectedMileage: reservation.expectedMileage,
+                }, 'image_placeholder');
+                
+                const finalContractText = fallbackContractText.replace('%%SIGNATURE_IMAGE%%', signatureImgTag);
+                await api.addContract({
+                    reservationId: reservation.id,
+                    customerId: reservation.customerId,
+                    vehicleId: reservation.vehicleId,
+                    generatedAt: new Date(),
+                    contractText: finalContractText
+                });
+            } else {
+                const updatedContractText = existingContract.contractText.replace('Smlouva bude digitálně podepsána při převzetí vozidla.', `Digitální podpis nájemce:\n${signatureImgTag}`);
+                await api.updateContract(existingContract.id, { contractText: updatedContractText });
+            }
 
             await api.updateReservation(reservationId, { status: 'active', startMileage });
             await api.updateVehicle({ ...reservation.vehicle, status: 'rented', currentMileage: startMileage });
