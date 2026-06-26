@@ -477,7 +477,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     contractText: finalContractText
                 });
             } else {
-                const updatedContractText = existingContract.contractText.replace('Smlouva bude digitálně podepsána při převzetí vozidla.', `Digitální podpis nájemce:\n${signatureImgTag}`);
+                const placeholder = 'Smlouva bude digitálně podepsána při převzetí vozidla.';
+                let updatedContractText = existingContract.contractText;
+                
+                // Flexible replacement to handle any whitespace or newline normalization differences
+                const regex = /Smlouva bude digitálně podepsána při převzetí vozidla\.?/gi;
+                if (updatedContractText.includes(placeholder)) {
+                    updatedContractText = updatedContractText.replace(placeholder, `Digitální podpis nájemce:\n${signatureImgTag}`);
+                } else if (regex.test(updatedContractText)) {
+                    updatedContractText = updatedContractText.replace(regex, `Digitální podpis nájemce:\n${signatureImgTag}`);
+                } else {
+                    // Ultimate fallback: append signature at the end if the placeholder was somehow modified or not found
+                    updatedContractText = `${updatedContractText}\n\nDigitální podpis nájemce:\n${signatureImgTag}`;
+                }
+                
                 await api.updateContract(existingContract.id, { contractText: updatedContractText });
             }
 

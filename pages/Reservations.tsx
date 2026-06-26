@@ -136,6 +136,7 @@ const Reservations: React.FC = () => {
         if (end <= start) return [];
         
         const conflictingVehicleIds = new Set<string>();
+        const now = new Date();
         for (const r of reservations) {
             // When editing, exclude the reservation being edited from conflict checks
             if (isEditing && r.id === editingId) continue;
@@ -143,6 +144,14 @@ const Reservations: React.FC = () => {
             if (['scheduled', 'active', 'pending-approval', 'pending-customer'].includes(r.status)) {
                 const resStart = new Date(r.startDate);
                 const resEnd = new Date(r.endDate);
+                
+                // Exclude forgotten/abandoned bookings from blocking
+                // If a reservation is 'scheduled', 'pending-approval', or 'pending-customer' and its start date is in the past, 
+                // it should not block any new future or current bookings.
+                if (['scheduled', 'pending-approval', 'pending-customer'].includes(r.status) && resStart < now) {
+                    continue;
+                }
+
                 if (start < resEnd && end > resStart) {
                     conflictingVehicleIds.add(r.vehicleId);
                 }

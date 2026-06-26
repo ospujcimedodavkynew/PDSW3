@@ -124,7 +124,11 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
 
     const forgottenReservations = useMemo(() => {
         const now = new Date();
-        return reservations.filter(r => r.status === 'scheduled' && r.startDate && new Date(r.startDate) < now);
+        return reservations.filter(r => 
+            ['scheduled', 'pending-approval', 'pending-customer'].includes(r.status) && 
+            r.startDate && 
+            new Date(r.startDate) < now
+        );
     }, [reservations]);
     
     const futureRentals = useMemo(() => {
@@ -193,8 +197,18 @@ const Dashboard: React.FC<{ setCurrentPage: (page: Page) => void }> = ({ setCurr
         const saturdayStart = findNextDay(6);
         const saturdayEnd = new Date(saturdayStart); saturdayEnd.setHours(23, 59, 59, 999);
 
-        // Include all active or scheduled for overlap checks
-        const activeAndScheduled = reservations.filter(r => r.status === 'active' || r.status === 'scheduled');
+        // Include all active, scheduled, pending-approval, or pending-customer for overlap checks
+        // We exclude forgotten/abandoned bookings starting in the past
+        const activeAndScheduled = reservations.filter(r => {
+            if (!['active', 'scheduled', 'pending-approval', 'pending-customer'].includes(r.status)) return false;
+            
+            // Exclude forgotten/abandoned bookings from blocking
+            if (['scheduled', 'pending-approval', 'pending-customer'].includes(r.status)) {
+                const resStart = new Date(r.startDate);
+                if (resStart < now) return false;
+            }
+            return true;
+        });
         
         const todayVehicles: { vehicle: Vehicle, note?: string }[] = [];
         const tomorrowVehicles: { vehicle: Vehicle, note?: string }[] = [];
